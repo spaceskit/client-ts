@@ -1,9 +1,16 @@
 import { GatewayClient, generateAuthKeyPair } from "../src/index.js";
 
-const gatewayUrl = Bun.env.GATEWAY_URL ?? "ws://127.0.0.1:9320";
-const requestedSpaceId = Bun.env.SPACE_ID?.trim() || undefined;
-const explicitWorkspaceRoot = Bun.env.WORKSPACE_ROOT?.trim() || undefined;
-const clearExplicitRootAfterSet = Bun.env.WORKSPACE_CLEAR_AFTER_SET === "1";
+const runtimeProcess = (globalThis as typeof globalThis & {
+  process?: {
+    env?: Record<string, string | undefined>;
+    exit?: (code?: number) => void;
+  };
+}).process;
+const env = runtimeProcess?.env ?? {};
+const gatewayUrl = env.GATEWAY_URL ?? "ws://127.0.0.1:9320";
+const requestedSpaceId = env.SPACE_ID?.trim() || undefined;
+const explicitWorkspaceRoot = env.WORKSPACE_ROOT?.trim() || undefined;
+const clearExplicitRootAfterSet = env.WORKSPACE_CLEAR_AFTER_SET === "1";
 
 async function main(): Promise<void> {
   const keyPair = await generateAuthKeyPair();
@@ -66,5 +73,5 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error("Workspace example failed:", error);
-  process.exit(1);
+  runtimeProcess?.exit?.(1);
 });

@@ -4,7 +4,15 @@ import {
   type AdapterProviderRegistration,
 } from "../src/index.js";
 
-const gatewayUrl = Bun.env.GATEWAY_URL ?? "ws://127.0.0.1:9320";
+const runtimeProcess = (globalThis as typeof globalThis & {
+  process?: {
+    env?: Record<string, string | undefined>;
+    on?: (event: string, handler: () => void) => void;
+    exit?: (code?: number) => void;
+  };
+}).process;
+const env = runtimeProcess?.env ?? {};
+const gatewayUrl = env.GATEWAY_URL ?? "ws://127.0.0.1:9320";
 
 async function main(): Promise<void> {
   const keyPair = await generateAuthKeyPair();
@@ -53,13 +61,13 @@ async function main(): Promise<void> {
     shuttingDown = true;
     console.log("\nShutting down adapter...");
     await adapter.disconnect();
-    process.exit(0);
+    runtimeProcess?.exit?.(0);
   };
 
-  process.on("SIGINT", () => {
+  runtimeProcess?.on?.("SIGINT", () => {
     void shutdown();
   });
-  process.on("SIGTERM", () => {
+  runtimeProcess?.on?.("SIGTERM", () => {
     void shutdown();
   });
 
@@ -69,5 +77,5 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error("Adapter example failed:", error);
-  process.exit(1);
+  runtimeProcess?.exit?.(1);
 });

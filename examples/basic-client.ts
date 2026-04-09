@@ -1,8 +1,16 @@
 import { GatewayClient, generateAuthKeyPair } from "../src/index.js";
 
-const gatewayUrl = Bun.env.GATEWAY_URL ?? "ws://127.0.0.1:9320";
-const spaceId = Bun.env.SPACE_ID;
-const prompt = Bun.env.PROMPT ?? "Hello from the TypeScript example client.";
+const runtimeProcess = (globalThis as typeof globalThis & {
+  process?: {
+    env?: Record<string, string | undefined>;
+    stdout?: { write: (value: string) => void };
+    exit?: (code?: number) => void;
+  };
+}).process;
+const env = runtimeProcess?.env ?? {};
+const gatewayUrl = env.GATEWAY_URL ?? "ws://127.0.0.1:9320";
+const spaceId = env.SPACE_ID;
+const prompt = env.PROMPT ?? "Hello from the TypeScript example client.";
 
 async function main(): Promise<void> {
   const keyPair = await generateAuthKeyPair();
@@ -19,9 +27,9 @@ async function main(): Promise<void> {
   });
 
   client.onTurnStream((stream) => {
-    process.stdout.write(stream.delta);
+    runtimeProcess?.stdout?.write(stream.delta);
     if (stream.done) {
-      process.stdout.write("\n");
+      runtimeProcess?.stdout?.write("\n");
     }
   });
 
@@ -44,5 +52,5 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error("Example client failed:", error);
-  process.exit(1);
+  runtimeProcess?.exit?.(1);
 });

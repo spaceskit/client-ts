@@ -11,10 +11,10 @@
  * - Request-response correlation with configurable timeout
  * - Event subscriptions with unsubscribe handlers
  *
- * Compatibility note:
+ * Contract note:
  * `proto/` is the canonical cross-process contract source of truth.
- * This client remains the legacy WebSocket compatibility SDK until generated
- * transport-neutral contracts replace the handwritten protocol surface.
+ * This handwritten WebSocket transport stays aligned to that contract, but it
+ * no longer carries compatibility-only alias fields for removed legacy paths.
  */
 
 // ---------------------------------------------------------------------------
@@ -116,10 +116,30 @@ export interface AuthenticatePayload {
  */
 export interface ExecuteTurnPayload {
   spaceUid: string;
-  /** Legacy compatibility fallback */
-  spaceId?: string;
   input: string;
   targetAgentId?: string;
+  targetAgentIds?: string[];
+  replyToTurnId?: string;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  mode?: 'ask' | 'plan' | 'execute';
+  effort?: 'low' | 'medium' | 'high';
+  accessMode?: 'default' | 'full_access';
+}
+
+export type TurnMode = 'ask' | 'plan' | 'execute';
+export type TurnEffort = 'low' | 'medium' | 'high';
+export type TurnAccessMode = 'default' | 'full_access';
+
+export interface ExecuteTurnOptions {
+  spaceUid: string;
+  input: string;
+  targetAgentId?: string;
+  targetAgentIds?: string[];
+  replyToTurnId?: string;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  mode?: TurnMode;
+  effort?: TurnEffort;
+  accessMode?: TurnAccessMode;
 }
 
 /**
@@ -127,11 +147,15 @@ export interface ExecuteTurnPayload {
  */
 export interface ResumeFeedbackPayload {
   spaceUid: string;
-  /** Legacy compatibility fallback */
-  spaceId?: string;
   turnId: string;
   response: 'approve' | 'reject' | 'revise' | 'defer';
   revision?: string;
+  approvalGrant?: ApprovalGrantPayload;
+}
+
+export interface ApprovalGrantPayload {
+  mode: GatewayToolApprovalGrantMode;
+  ttlSeconds?: number;
 }
 
 /**
@@ -139,8 +163,6 @@ export interface ResumeFeedbackPayload {
  */
 export interface SubscribePayload {
   spaceUids: string[];
-  /** Legacy compatibility fallback */
-  spaceIds?: string[];
 }
 
 /**
@@ -165,6 +187,8 @@ export interface SpaceCreatePayload {
   spaceType?: string;
   name: string;
   goal?: string;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
   turnModel?: string;
   templateId?: string;
   templateRevision?: number;
@@ -173,6 +197,7 @@ export interface SpaceCreatePayload {
   visibility?: 'shared' | 'private';
   turnModelConfig?: Record<string, unknown>;
   maxTurns?: number;
+  thinkingCapturePolicy?: ThinkingCapturePolicy;
   moderatorProfileId?: string;
   initialAgents?: SpaceCreateInitialAgentPayload[];
 }
@@ -195,6 +220,18 @@ export interface SpaceListPayload {
   limit?: number;
 }
 
+export interface SpaceArchivePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+}
+
+export interface SpaceDeletePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+}
+
 /**
  * Space Admin: add agent assignment.
  */
@@ -203,7 +240,8 @@ export interface SpaceAddAgentPayload {
   idempotencyKey?: string;
   spaceId: string;
   agentId: string;
-  profileId: string;
+  agentDefinitionId?: string;
+  profileId?: string;
   securityScope?: Record<string, unknown>;
   spawnContext?: string;
   contextOverrides?: Record<string, unknown>;
@@ -230,6 +268,7 @@ export interface SpaceUpdateAgentAssignmentPayload {
   idempotencyKey?: string;
   spaceId: string;
   agentId: string;
+  agentDefinitionId?: string;
   profileId?: string;
   securityScope?: Record<string, unknown> | null;
   spawnContext?: string | null;
@@ -246,7 +285,8 @@ export interface SpaceSetOrchestratorPayload {
   apiVersion?: string;
   idempotencyKey?: string;
   spaceId: string;
-  profileId: string;
+  agentDefinitionId?: string;
+  profileId?: string;
 }
 
 /**
@@ -288,6 +328,7 @@ export interface SpaceApproveMcpAgentPayload {
   remoteAgentId: string;
   displayName?: string;
   agentId?: string;
+  agentDefinitionId?: string;
   profileId?: string;
 }
 
@@ -357,7 +398,8 @@ export interface SpaceSetWorkspaceResponsePayload {
 
 export interface SpaceCreateInitialAgentPayload {
   agentId: string;
-  profileId: string;
+  agentDefinitionId?: string;
+  profileId?: string;
   securityScope?: Record<string, unknown>;
   spawnContext?: string;
   contextOverrides?: Record<string, unknown>;
@@ -374,6 +416,7 @@ export type SpaceAssignmentRole =
 export interface SpaceAgentAssignment {
   spaceId: string;
   agentId: string;
+  agentDefinitionId?: string;
   profileId: string;
   securityScope?: Record<string, unknown>;
   spawnContext?: string;
@@ -388,17 +431,38 @@ export interface SpaceAgentAssignment {
   displayName?: string;
 }
 
+export type ThinkingCapturePolicy = 'OFF' | 'SUMMARY' | 'FULL';
+export type SpaceExperienceCaptureMode = 'INHERIT' | 'ENABLED' | 'DISABLED';
+export type SpacePrivacyMode = 'STANDARD' | 'INCOGNITO_SESSION';
+
+export interface SpaceMemoryPolicy {
+  experienceCapture: SpaceExperienceCaptureMode;
+  privacyMode: SpacePrivacyMode;
+}
+
+export interface GatewayMemoryDefaults {
+  defaultExperienceCapture: SpaceExperienceCaptureMode;
+  defaultSpacePrivacyMode: SpacePrivacyMode;
+  updatedAt: string;
+}
+
 export interface SpaceSummary {
   id: string;
   spaceUid: string;
   workspace?: SpaceWorkspace;
+  status?: string;
   resourceId: string;
   name: string;
   goal?: string;
+  orchestratorAgentDefinitionId?: string;
   orchestratorProfileId?: string;
   templateId?: string;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
   turnModel: string;
   turnModelConfig?: Record<string, unknown>;
+  thinkingCapturePolicy?: ThinkingCapturePolicy;
+  memoryPolicy?: SpaceMemoryPolicy;
   skillIds?: string[];
   agents: SpaceAgentAssignment[];
   capabilities: string[];
@@ -406,6 +470,8 @@ export interface SpaceSummary {
   maxTurns?: number;
   visibility: 'shared' | 'private';
   moderatorProfileId?: string;
+  archivedAt?: string;
+  deletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -420,6 +486,70 @@ export interface SpaceGetResponsePayload {
 
 export interface SpaceListResponsePayload {
   spaces: SpaceSummary[];
+}
+
+export interface SpaceGetMemoryPolicyPayload {
+  apiVersion?: string;
+  spaceId: string;
+}
+
+export interface SpaceGetMemoryPolicyResponsePayload {
+  spaceId: string;
+  memoryPolicy: SpaceMemoryPolicy;
+}
+
+export interface SpaceSetMemoryPolicyPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  memoryPolicy: SpaceMemoryPolicy;
+}
+
+export interface SpaceSetMemoryPolicyResponsePayload {
+  space: SpaceSummary;
+}
+
+export interface SpaceEndIncognitoSessionPayload {
+  apiVersion?: string;
+  spaceId: string;
+}
+
+export interface SpaceEndIncognitoSessionResponsePayload {
+  space: SpaceSummary;
+  ended: boolean;
+  reason: string;
+  purgedAt?: string;
+  sessionId?: string;
+}
+
+export interface GatewayGetMemoryDefaultsPayload {
+  apiVersion?: string;
+}
+
+export interface GatewayGetMemoryDefaultsResponsePayload {
+  defaults: GatewayMemoryDefaults;
+}
+
+export interface GatewaySetMemoryDefaultsPayload {
+  apiVersion?: string;
+  defaultExperienceCapture: SpaceExperienceCaptureMode;
+  defaultSpacePrivacyMode?: SpacePrivacyMode;
+}
+
+export interface GatewaySetMemoryDefaultsResponsePayload {
+  defaults: GatewayMemoryDefaults;
+}
+
+export interface SpaceArchiveResponsePayload {
+  space: SpaceSummary;
+  archived: boolean;
+}
+
+export interface SpaceDeleteResponsePayload {
+  spaceId: string;
+  spaceUid: string;
+  deleted: boolean;
+  space?: SpaceSummary | null;
 }
 
 export interface SpaceAddAgentResponsePayload {
@@ -608,177 +738,716 @@ export interface SpaceListOrchestrationJournalResponsePayload {
   nextOffset?: number;
 }
 
+export interface SpaceListActivityLogPayload {
+  apiVersion?: string;
+  spaceId?: string;
+  spaceUid?: string;
+  turnId?: string;
+  includeSystem?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SpaceActivityLogEntry {
+  entryId: string;
+  source: string;
+  category: string;
+  turnId?: string;
+  rootTurnId?: string;
+  summaryTurnId?: string;
+  agentId?: string;
+  actorId?: string;
+  eventType: string;
+  title: string;
+  detail?: string;
+  status?: string;
+  visibility: string;
+  toolCallId?: string;
+  toolName?: string;
+  createdAt: string;
+  seq: number;
+  payload: Record<string, unknown>;
+}
+
+export interface SpaceListActivityLogResponsePayload {
+  spaceId: string;
+  spaceUid: string;
+  entries: SpaceActivityLogEntry[];
+  total: number;
+  nextOffset?: number;
+}
+
+export interface SpaceGetTurnTracePayload {
+  apiVersion?: string;
+  spaceId: string;
+  turnId: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SpaceTurnTraceEvent {
+  eventId: string;
+  seq: number;
+  eventType: string;
+  eventSubtype?: string;
+  agentId?: string;
+  createdAt: string;
+  payload: Record<string, unknown>;
+}
+
+export interface SpaceTurnTraceToolCall {
+  toolCallId: string;
+  toolName?: string;
+  status: string;
+  agentId?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface SpaceTurnTraceActivity {
+  activityId: string;
+  seq: number;
+  eventType: string;
+  agentId?: string;
+  title: string;
+  detail?: string;
+  status?: string;
+  visibility: string;
+  toolCallId?: string;
+  toolName?: string;
+  createdAt: string;
+  payload: Record<string, unknown>;
+}
+
+export interface SpaceTurnTraceExecutionRun {
+  executionId: string;
+  stepIndex: number;
+  agentId?: string;
+  providerId?: string;
+  modelId?: string;
+  status: 'running' | 'completed' | 'failed';
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  workingDirectory?: string;
+  exitCode?: number;
+  commandPreview?: string;
+  transcriptArtifactId?: string;
+  transcriptTruncated: boolean;
+}
+
+export interface SpaceTurnTrace {
+  spaceId: string;
+  turnId: string;
+  total: number;
+  events: SpaceTurnTraceEvent[];
+  toolCalls: SpaceTurnTraceToolCall[];
+  activities: SpaceTurnTraceActivity[];
+  executionRuns: SpaceTurnTraceExecutionRun[];
+  artifactIds: string[];
+}
+
+export interface SpaceGetTurnTraceResponsePayload {
+  trace: SpaceTurnTrace;
+}
+
+export interface SpaceGetArtifactPayload {
+  apiVersion?: string;
+  spaceId: string;
+  artifactId: string;
+}
+
+export interface SpaceGetDebugArtifactPayload {
+  apiVersion?: string;
+  spaceId: string;
+  artifactId: string;
+}
+
+export interface SpaceArtifactSummary {
+  artifactId: string;
+  spaceId: string;
+  turnId?: string;
+  agentId?: string;
+  type: string;
+  title: string;
+  mimeType?: string;
+  sizeBytes: number;
+  tags: string[];
+  visibility: 'shared' | 'private';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpaceArtifactDetail extends SpaceArtifactSummary {
+  content: string | Record<string, unknown>;
+}
+
+export interface SpaceListArtifactsPayload {
+  apiVersion?: string;
+  spaceId: string;
+  turnId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SpaceListArtifactsResponsePayload {
+  artifacts: SpaceArtifactSummary[];
+  total: number;
+}
+
+export interface SpaceGetArtifactResponsePayload {
+  artifact: SpaceArtifactDetail;
+}
+
+export interface SpaceGetDebugArtifactResponsePayload {
+  artifact: SpaceArtifactDetail;
+}
+
+export interface SpaceExperienceRecord {
+  experienceId: string;
+  spaceId: string;
+  title?: string;
+  summary?: string;
+  observationSummary?: string;
+  status?: string;
+  sourceTurnId?: string;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SpaceListExperiencesPayload {
+  apiVersion?: string;
+  spaceId: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SpaceListExperiencesResponsePayload {
+  experiences: SpaceExperienceRecord[];
+  total: number;
+  nextOffset?: number;
+}
+
+export interface SpaceGetExperiencePayload {
+  apiVersion?: string;
+  spaceId: string;
+  experienceId: string;
+}
+
+export interface SpaceGetExperienceResponsePayload {
+  experience: SpaceExperienceRecord;
+}
+
+export interface SpacePersonalityInsightRecord {
+  insightId: string;
+  spaceId: string;
+  experienceId?: string;
+  agentId?: string;
+  title?: string;
+  summary?: string;
+  rationale?: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  dismissedAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SpaceListInsightsPayload {
+  apiVersion?: string;
+  spaceId: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SpaceListInsightsResponsePayload {
+  insights: SpacePersonalityInsightRecord[];
+  total: number;
+  nextOffset?: number;
+}
+
+export interface SpaceGetInsightPayload {
+  apiVersion?: string;
+  spaceId: string;
+  insightId: string;
+}
+
+export interface SpaceGetInsightResponsePayload {
+  insight: SpacePersonalityInsightRecord;
+}
+
+export interface SpaceAcceptInsightPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  insightId: string;
+  notes?: string;
+}
+
+export interface SpaceRejectInsightPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  insightId: string;
+  reason?: string;
+}
+
+export interface SpaceDismissInsightPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  insightId: string;
+  reason?: string;
+}
+
+export interface SpaceInsightActionResponsePayload {
+  insight: SpacePersonalityInsightRecord;
+}
+
+export interface SpaceAgentNotesRecord {
+  spaceId: string;
+  agentId: string;
+  notes: string;
+  updatedAt: string;
+  createdAt?: string;
+}
+
+export interface SpaceGetSpaceAgentNotesPayload {
+  apiVersion?: string;
+  spaceId: string;
+  agentId: string;
+}
+
+export interface SpaceUpdateSpaceAgentNotesPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  agentId: string;
+  notes: string;
+}
+
+export interface SpaceAgentNotesResponsePayload {
+  notes?: SpaceAgentNotesRecord | null;
+}
+
+export interface SpaceUserProfileRecord {
+  principalId: string;
+  displayName?: string;
+  summary?: string;
+  facts: string[];
+  preferences: string[];
+  corrections: string[];
+  metadata?: Record<string, unknown>;
+  updatedAt: string;
+  createdAt?: string;
+}
+
+export interface SpaceGetUserProfilePayload {
+  apiVersion?: string;
+  principalId?: string;
+}
+
+export interface SpaceUpdateUserProfilePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  principalId?: string;
+  displayName?: string;
+  summary?: string;
+  facts?: string[];
+  preferences?: string[];
+  corrections?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface SpaceUserProfileResponsePayload {
+  profile?: SpaceUserProfileRecord | null;
+}
+
+export interface SpaceMemoryRecord {
+  memoryId: string;
+  spaceId: string;
+  principalId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  status?: string;
+  scopeType?: string;
+  scopeId?: string;
+  category?: string;
+  textPreview?: string;
+  importance?: number;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SpaceListMemoriesPayload {
+  apiVersion?: string;
+  spaceId: string;
+  principalId?: string;
+  sourceType?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SpaceListMemoriesResponsePayload {
+  memories: SpaceMemoryRecord[];
+  total: number;
+  nextOffset?: number;
+}
+
+export interface SpaceDeleteMemoryPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  memoryId: string;
+}
+
+export interface SpaceDeleteMemoryResponsePayload {
+  deleted: boolean;
+  memoryId: string;
+}
+
+export interface SpaceUpdateMemoryImportancePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  spaceId: string;
+  memoryId: string;
+  importance: number;
+}
+
+export interface SpaceUpdateMemoryImportanceResponsePayload {
+  memory: SpaceMemoryRecord;
+}
+
 export interface ProfileModelConfig {
   preferredModels: string[];
   fallbackModels?: string[];
   constraints?: Record<string, unknown>;
 }
 
-export interface ProfileSummary {
-  profileId: string;
+export type ManagedRecordStatus = 'active' | 'archived';
+
+export interface AgentDefinitionSummary {
+  agentDefinitionId: string;
+  personaId?: string;
   name: string;
   description: string;
-  personalityPrompt: string;
+  instructions: string;
   defaultSkillIds: string[];
   providerHint?: string;
   modelHint?: string;
   modelConfig?: ProfileModelConfig;
-  canModerate: boolean;
   isDefault: boolean;
-  status: 'active' | 'archived';
+  status: ManagedRecordStatus;
   activeRevision: number;
   source: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ProfileCreatePayload {
-  apiVersion?: string;
-  idempotencyKey?: string;
-  profileId?: string;
-  name: string;
-  description?: string;
-  personalityPrompt?: string;
-  defaultSkillIds?: string[];
-  providerHint?: string;
-  modelHint?: string;
-  modelConfig?: ProfileModelConfig;
-  canModerate?: boolean;
-  isDefault?: boolean;
-}
-
-export interface ProfileCreateResponsePayload {
-  profile: ProfileSummary;
+export interface AgentDefinitionCreateResult {
+  agentDefinition: AgentDefinitionSummary;
   created: boolean;
 }
 
-export interface ProfileGetPayload {
-  apiVersion?: string;
+export interface AgentDefinitionUpdateResult {
+  agentDefinition: AgentDefinitionSummary;
+  newRevision: number;
+}
+
+export interface AgentDefinitionArchiveResult {
+  agentDefinition: AgentDefinitionSummary;
+  archived: boolean;
+}
+
+export interface PersonaSummary {
+  personaId: string;
+  name: string;
+  description: string;
+  tone?: string;
+  style?: string;
+  emotionalLayer?: string;
+  constraints: string[];
+  instructions: string;
+  isDefault: boolean;
+  status: ManagedRecordStatus;
+  activeRevision: number;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonaCreateResult {
+  persona: PersonaSummary;
+  created: boolean;
+}
+
+export interface PersonaUpdateResult {
+  persona: PersonaSummary;
+  newRevision: number;
+}
+
+export interface PersonaArchiveResult {
+  persona: PersonaSummary;
+  archived: boolean;
+}
+
+export type CompiledInstructionSectionKey =
+  | 'system_scaffold'
+  | 'agent_definition'
+  | 'persona'
+  | 'skills'
+  | 'policy_appendices'
+  | 'workspace_context';
+
+export interface CompiledInstructionSection {
+  key: CompiledInstructionSectionKey;
+  title: string;
+  content: string;
+}
+
+export interface CompiledInstructionsPreview {
+  agentDefinitionId: string;
+  personaId?: string;
+  sections: CompiledInstructionSection[];
+  compiledText: string;
+  generatedAt: string;
+}
+
+export type RuntimeSystemPromptSectionKey =
+  | "agent_definition"
+  | "persona"
+  | "active_skill_context"
+  | "workspace_context"
+  | "conversation_prompt"
+  | "assignment_context";
+
+export interface RuntimeSystemPromptSection {
+  key: RuntimeSystemPromptSectionKey;
+  title: string;
+  content: string;
+}
+
+export interface RuntimeSystemPromptPreview {
+  spaceId: string;
+  agentId?: string;
   profileId: string;
+  personaId?: string;
+  targetKind: "agent_assignment" | "space_profile";
+  conversationTopology?: "direct" | "shared_team_chat" | "broadcast_team";
+  promptPackId?: string;
+  sections: RuntimeSystemPromptSection[];
+  compiledText: string;
+  generatedAt: string;
 }
 
-export interface ProfileGetResponsePayload {
-  profile: ProfileSummary;
-}
-
-export interface ProfileListPayload {
+export interface IdentityListAgentDefinitionsPayload {
   apiVersion?: string;
   includeArchived?: boolean;
 }
 
-export interface ProfileListResponsePayload {
-  profiles: ProfileSummary[];
+export interface IdentityListAgentDefinitionsResponsePayload {
+  agentDefinitions: AgentDefinitionSummary[];
 }
 
-export interface ProfileUpdatePayload {
+export interface IdentityGetAgentDefinitionPayload {
+  apiVersion?: string;
+  agentDefinitionId: string;
+}
+
+export interface IdentityGetAgentDefinitionResponsePayload {
+  agentDefinition: AgentDefinitionSummary;
+}
+
+export interface IdentityCreateAgentDefinitionPayload {
   apiVersion?: string;
   idempotencyKey?: string;
-  profileId: string;
-  name?: string;
+  agentDefinitionId?: string;
+  personaId?: string;
+  name: string;
   description?: string;
-  personalityPrompt?: string;
+  instructions?: string;
   defaultSkillIds?: string[];
   providerHint?: string;
   modelHint?: string;
   modelConfig?: ProfileModelConfig;
-  canModerate?: boolean;
   isDefault?: boolean;
 }
 
-export interface ProfileUpdateResponsePayload {
-  profile: ProfileSummary;
+export interface IdentityCreateAgentDefinitionResponsePayload {
+  agentDefinition: AgentDefinitionSummary;
+  created: boolean;
+}
+
+export interface IdentityUpdateAgentDefinitionPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  agentDefinitionId: string;
+  personaId?: string;
+  name?: string;
+  description?: string;
+  instructions?: string;
+  defaultSkillIds?: string[];
+  providerHint?: string;
+  modelHint?: string;
+  modelConfig?: ProfileModelConfig;
+  isDefault?: boolean;
+}
+
+export interface IdentityUpdateAgentDefinitionResponsePayload {
+  agentDefinition: AgentDefinitionSummary;
   newRevision: number;
 }
 
-export interface ProfileArchivePayload {
+export interface IdentityArchiveAgentDefinitionPayload {
   apiVersion?: string;
   idempotencyKey?: string;
-  profileId: string;
+  agentDefinitionId: string;
 }
 
-export interface ProfileArchiveResponsePayload {
-  profile: ProfileSummary;
+export interface IdentityArchiveAgentDefinitionResponsePayload {
+  agentDefinition: AgentDefinitionSummary;
   archived: boolean;
 }
 
-export type PresetKind = 'agent' | 'space';
-export type PresetSource = 'system' | 'user';
+export interface IdentityListPersonasPayload {
+  apiVersion?: string;
+  includeArchived?: boolean;
+}
+
+export interface IdentityListPersonasResponsePayload {
+  personas: PersonaSummary[];
+}
+
+export interface IdentityGetPersonaPayload {
+  apiVersion?: string;
+  personaId: string;
+}
+
+export interface IdentityGetPersonaResponsePayload {
+  persona: PersonaSummary;
+}
+
+export interface IdentityCreatePersonaPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  personaId?: string;
+  name: string;
+  description?: string;
+  tone?: string;
+  style?: string;
+  emotionalLayer?: string;
+  constraints?: string[];
+  instructions?: string;
+  isDefault?: boolean;
+}
+
+export interface IdentityCreatePersonaResponsePayload {
+  persona: PersonaSummary;
+  created: boolean;
+}
+
+export interface IdentityUpdatePersonaPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  personaId: string;
+  name?: string;
+  description?: string;
+  tone?: string;
+  style?: string;
+  emotionalLayer?: string;
+  constraints?: string[];
+  instructions?: string;
+  isDefault?: boolean;
+}
+
+export interface IdentityUpdatePersonaResponsePayload {
+  persona: PersonaSummary;
+  newRevision: number;
+}
+
+export interface IdentityArchivePersonaPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  personaId: string;
+}
+
+export interface IdentityArchivePersonaResponsePayload {
+  persona: PersonaSummary;
+  archived: boolean;
+}
+
+export interface IdentityPreviewCompiledInstructionsPayload {
+  apiVersion?: string;
+  agentDefinitionId: string;
+  workspaceContext?: string;
+}
+
+export interface IdentityPreviewCompiledInstructionsResponsePayload {
+  preview: CompiledInstructionsPreview;
+}
+
+export interface IdentityPreviewRuntimeSystemPromptPayload {
+  apiVersion?: string;
+  spaceId: string;
+  agentId?: string;
+  profileId?: string;
+}
+
+export interface IdentityPreviewRuntimeSystemPromptResponsePayload {
+  preview: RuntimeSystemPromptPreview;
+}
+
+export interface IdentityPreviewSystemPromptMatrixPayload {
+  apiVersion?: string;
+  agentDefinitionId: string;
+  spaceId?: string;
+  agentId?: string;
+}
+
+export type PromptBudgetClass = 'full' | 'compact' | 'minimal' | 'cli';
+
+export interface SystemPromptVariant {
+  budgetClass: PromptBudgetClass;
+  label: string;
+  tokenEstimate: number;
+  sections: CompiledInstructionSection[];
+  compiledText: string;
+}
+
+export interface SystemPromptMatrix {
+  agentDefinitionId: string;
+  personaId?: string;
+  generatedAt: string;
+  variants: SystemPromptVariant[];
+}
+
+export interface IdentityPreviewSystemPromptMatrixResponsePayload {
+  matrix: SystemPromptMatrix;
+}
+
 export type CommunicationMode = 'async_notes' | 'chat_first' | 'structured_handoff';
 
 export interface TemplateAgentDefinition {
   agentId: string;
-  profileId: string;
+  agentDefinitionId?: string;
+  profileId?: string;
   role?: SpaceAssignmentRole;
   turnOrder?: number;
   isPrimary?: boolean;
-}
-
-export interface SpacePresetConfig {
-  communicationMode: CommunicationMode;
-  turnModel: string;
-  baseAgents: TemplateAgentDefinition[];
-  agentPresetIds: string[];
-}
-
-export interface AgentPresetConfig {
-  defaultAgents: TemplateAgentDefinition[];
-}
-
-export interface PresetSummary {
-  presetId: string;
-  kind: PresetKind;
-  title: string;
-  description: string;
-  source: PresetSource;
-  version: number;
-  tags: string[];
-}
-
-export interface PresetDetail extends PresetSummary {
-  spacePreset?: SpacePresetConfig;
-  agentPreset?: AgentPresetConfig;
-}
-
-export interface PresetListPayload {
-  apiVersion?: string;
-  kind?: PresetKind | 'all';
-  source?: PresetSource | 'all';
-  tags?: string[];
-}
-
-export interface PresetGetPayload {
-  apiVersion?: string;
-  presetId: string;
-}
-
-export interface PresetApplyToSpacePayload {
-  apiVersion?: string;
-  idempotencyKey?: string;
-  presetId: string;
-  targetSpaceId?: string;
-  spaceId?: string;
-  resourceId?: string;
-  name?: string;
-  goal?: string;
-  visibility?: 'shared' | 'private';
-  workspaceRoot?: string;
-}
-
-export interface PresetApplyToSpaceResult {
-  applicationId: string;
-  presetId: string;
-  spaceId: string;
-  createdSpace: boolean;
-  appliedAgents: number;
-  skippedAgents: number;
-  appliedAt: string;
-  space: SpaceSummary;
 }
 
 export interface SpaceTemplateSummary {
   templateId: string;
   title: string;
   communicationMode: CommunicationMode;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
   agentPresetIds: string[];
   createdBy: string;
   updatedAt: string;
@@ -830,6 +1499,8 @@ export interface SpaceSaveTemplatePayload {
   title: string;
   description?: string;
   communicationMode?: CommunicationMode;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
   baseAgents?: TemplateAgentDefinition[];
   agentPresetIds?: string[];
   sourceSpaceId?: string;
@@ -839,6 +1510,303 @@ export interface SpaceSaveTemplatePayload {
 export interface SpaceSaveTemplateResult {
   template: SpaceTemplateSummary;
   created: boolean;
+}
+
+export interface SpaceTemplateListPayload {
+  apiVersion?: string;
+  includeArchived?: boolean;
+}
+
+export interface SpaceTemplateGetPayload {
+  apiVersion?: string;
+  templateId: string;
+}
+
+export interface SpaceTemplatePreviewPayload {
+  apiVersion?: string;
+  templateId: string;
+  resourceId?: string;
+  name?: string;
+  goal?: string;
+}
+
+export interface SpaceTemplateCreateSpacePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  templateId: string;
+  spaceId?: string;
+  resourceId: string;
+  name?: string;
+  goal?: string;
+  visibility?: 'shared' | 'private';
+  workspaceRoot?: string;
+}
+
+export interface SpaceTemplateSavePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  templateId?: string;
+  name: string;
+  description?: string;
+  communicationMode?: CommunicationMode;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
+  baseAgents?: TemplateAgentDefinition[];
+  sourceSpaceId?: string;
+}
+
+export interface SpaceTemplateArchivePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  templateId: string;
+}
+
+export interface SpaceTemplatePreviewResolved {
+  templateId: string;
+  templateRevision: number;
+  name: string;
+  goal?: string;
+  resourceId: string;
+  communicationMode: CommunicationMode;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
+  turnModel: string;
+  initialAgents: TemplateAgentDefinition[];
+}
+
+export interface SpaceTemplateRecord {
+  templateId: string;
+  name: string;
+  description?: string;
+  status: ManagedRecordStatus;
+  activeRevision: number;
+  communicationMode: CommunicationMode;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  promptPackId?: string;
+  turnModel: string;
+  agentDefinitions: TemplateAgentDefinition[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpaceTemplateListResponsePayload {
+  templates: SpaceTemplateRecord[];
+}
+
+export interface SpaceTemplateGetResponsePayload {
+  template: SpaceTemplateRecord;
+}
+
+export interface SpaceTemplatePreviewResponsePayload {
+  template: SpaceTemplateRecord;
+  resolved: SpaceTemplatePreviewResolved;
+  warnings: string[];
+}
+
+export interface SpaceTemplateCreateSpaceResponsePayload {
+  template: SpaceTemplateRecord;
+  space: SpaceSummary;
+}
+
+export interface SpaceTemplateSaveResponsePayload {
+  template: SpaceTemplateRecord;
+  created: boolean;
+}
+
+export interface SpaceTemplateArchiveResponsePayload {
+  template: SpaceTemplateRecord;
+  archived: boolean;
+}
+
+export interface SpaceTemplatePreviewResult {
+  template: SpaceTemplateRecord;
+  resolved: SpaceTemplatePreviewResolved;
+  warnings: string[];
+}
+
+export interface SpaceTemplateCreateSpaceResult {
+  template: SpaceTemplateRecord;
+  space: SpaceSummary;
+}
+
+export interface SpaceTemplateSaveResult {
+  template: SpaceTemplateRecord;
+  created: boolean;
+}
+
+export interface SpaceTemplateArchiveResult {
+  template: SpaceTemplateRecord;
+  archived: boolean;
+}
+
+export type LibrarySourceKind = 'installed' | 'scanned' | 'verified' | 'system';
+export type LibraryEntryStatus = 'enabled' | 'disabled' | 'archived';
+
+export interface LibraryEntry {
+  entryId: string;
+  skillId?: string;
+  name: string;
+  description?: string;
+  contentMarkdown?: string;
+  sourceKind: LibrarySourceKind;
+  sourceRef?: string;
+  provenance?: Record<string, unknown>;
+  tags: string[];
+  status: LibraryEntryStatus;
+  importable: boolean;
+  importedSkillId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LibraryListEntriesPayload {
+  apiVersion?: string;
+  query?: string;
+  sourceKinds?: LibrarySourceKind[];
+  includeArchived?: boolean;
+  includeContent?: boolean;
+  limit?: number;
+}
+
+export interface LibraryListEntriesResponsePayload {
+  entries: LibraryEntry[];
+}
+
+export interface LibraryGetEntryPayload {
+  apiVersion?: string;
+  entryId: string;
+  includeContent?: boolean;
+}
+
+export interface LibraryGetEntryResponsePayload {
+  entry: LibraryEntry;
+}
+
+export interface LibrarySaveSkillPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  entryId?: string;
+  skillId?: string;
+  name: string;
+  description?: string;
+  contentMarkdown: string;
+  tags?: string[];
+  sourceKind?: LibrarySourceKind;
+  sourceRef?: string;
+  enabled?: boolean;
+}
+
+export interface LibrarySaveSkillResponsePayload {
+  entry: LibraryEntry;
+  created: boolean;
+}
+
+export interface LibraryImportEntryPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  entryId: string;
+  skillId?: string;
+  name?: string;
+}
+
+export interface LibraryImportEntryResponsePayload {
+  entry: LibraryEntry;
+  created: boolean;
+}
+
+export interface LibraryArchiveEntryPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  entryId: string;
+}
+
+export interface LibraryArchiveEntryResponsePayload {
+  entry: LibraryEntry;
+  archived: boolean;
+}
+
+export interface LibrarySetEntryEnabledPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  entryId: string;
+  enabled: boolean;
+}
+
+export interface LibrarySetEntryEnabledResponsePayload {
+  entry: LibraryEntry;
+}
+
+export interface LibraryDeleteEntryPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  entryId: string;
+}
+
+export interface LibraryDeleteEntryResponsePayload {
+  entryId: string;
+  deleted: boolean;
+}
+
+export interface LibraryScanEntriesPayload {
+  apiVersion?: string;
+}
+
+export interface LibraryScanEntriesResponsePayload {
+  entries: LibraryEntry[];
+  scannedAt: string;
+}
+
+export interface SkillDraft {
+  draftId: string;
+  name: string;
+  description?: string;
+  requestPrompt: string;
+  contentMarkdown: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LibraryListSkillDraftsPayload {
+  apiVersion?: string;
+}
+
+export interface LibraryListSkillDraftsResponsePayload {
+  drafts: SkillDraft[];
+}
+
+export interface LibraryGetSkillDraftPayload {
+  apiVersion?: string;
+  draftId: string;
+}
+
+export interface LibraryGetSkillDraftResponsePayload {
+  draft: SkillDraft;
+}
+
+export interface LibraryCreateSkillDraftPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  draftId?: string;
+  name?: string;
+  description?: string;
+  requestPrompt: string;
+}
+
+export interface LibraryCreateSkillDraftResponsePayload {
+  draft: SkillDraft;
+  created: boolean;
+}
+
+export interface LibraryDeleteSkillDraftPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  draftId: string;
+}
+
+export interface LibraryDeleteSkillDraftResponsePayload {
+  draftId: string;
+  deleted: boolean;
 }
 
 export interface DeviceIdentity {
@@ -1039,12 +2007,53 @@ export interface AuthResultPayload {
 /**
  * Gateway-to-Client: Turn event notification
  */
+// ---------------------------------------------------------------------------
+// Typed event payload union — mirrors gateway TypedTurnEventPayload
+// ---------------------------------------------------------------------------
+
+export interface TurnUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface TurnMetadata {
+  modelId?: string;
+  providerId?: string;
+  durationMs?: number;
+  finishReason?: string;
+  startedAt?: string;
+  completedAt?: string;
+  tokensPerSecond?: number;
+}
+
+export type TypedTurnEventPayload =
+  | { kind: 'turn.started'; agentId: string; turnId: string; rootTurnId?: string; conversationTopology?: string; transcriptVisibility?: string }
+  | { kind: 'turn.completed'; agentId: string; usage?: TurnUsage; metadata?: TurnMetadata; finalMessage?: string; effectiveSafetyProfileId?: string }
+  | { kind: 'turn.failed'; errorMessage: string; errorCode?: string }
+  | { kind: 'reasoning.delta'; text: string }
+  | { kind: 'tool.started'; toolCallId: string; toolName: string; arguments?: Record<string, unknown>; agentId?: string }
+  | { kind: 'tool.completed'; toolCallId: string; toolName?: string; result: unknown; isError: boolean; agentId?: string }
+  | { kind: 'state.changed'; state: 'idle' | 'thinking' | 'acting' | 'needs_feedback' | 'errored' }
+  | { kind: 'approval.requested'; requestId: string; agentId: string; description: string; options: string[]; context?: Record<string, unknown> }
+  | { kind: 'approval.resolved'; requestId: string; response: string; agentId?: string }
+  | { kind: 'rate_limited'; retryAfterMs: number; attempt: number; maxAttempts: number; providerId: string; retryAt: string };
+
+// ---------------------------------------------------------------------------
+
 export interface TurnEventPayload {
   spaceId: string;
   spaceUid: string;
   turnId: string;
+  rootTurnId?: string;
+  agentId?: string;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  transcriptVisibility?: 'visible' | 'activity_only' | 'summary';
+  summaryTurnId?: string;
   eventType: string;
   data: unknown;
+  typedPayload?: TypedTurnEventPayload;
+  ts?: string;
 }
 
 /**
@@ -1054,7 +2063,11 @@ export interface TurnStreamPayload {
   spaceId: string;
   spaceUid: string;
   turnId: string;
+  rootTurnId?: string;
   agentId: string;
+  conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
+  transcriptVisibility?: 'visible' | 'activity_only' | 'summary';
+  summaryTurnId?: string;
   delta: string;
   seq: number;
   done: boolean;
@@ -1205,6 +2218,263 @@ export interface GatewayGetLocalUsageTelemetryResponsePayload {
   generatedAt: string;
 }
 
+export type GatewayToolDangerLevel = 'standard' | 'destructive';
+export type GatewayToolHealthStatus = 'unknown' | 'ok' | 'degraded';
+export type GatewayToolApprovalGrantMode = 'once' | 'time_window' | 'durable';
+export type GatewayToolCwdMode = 'space_root' | 'fixed';
+export type GatewayToolOutputMode = 'text' | 'json';
+
+export interface GatewayToolExample {
+  name: string;
+  description?: string;
+  arguments: Record<string, unknown>;
+  expectedOutput?: string;
+}
+
+export interface GatewayTool {
+  schemaVersion: number;
+  id: string;
+  providerId: string;
+  displayName: string;
+  description: string;
+  bundleId?: string;
+  bundleDisplayName?: string;
+  bundleDescription?: string;
+  toolGroupId?: string;
+  toolGroupDisplayName?: string;
+  executable: string;
+  resolvedExecutable: string;
+  argsTemplate: string[];
+  inputSchema: Record<string, unknown>;
+  instructions?: string;
+  examples: GatewayToolExample[];
+  timeoutMs: number;
+  maxOutputBytes: number;
+  cwdMode: GatewayToolCwdMode;
+  fixedCwd?: string;
+  outputMode: GatewayToolOutputMode;
+  dangerLevel: GatewayToolDangerLevel;
+  available: boolean;
+  healthStatus: GatewayToolHealthStatus;
+  healthMessage?: string;
+  manifestPath: string;
+  readmePath?: string;
+  readmeContent?: string;
+  requiresApproval: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GatewayToolApprovalGrant {
+  principalId: string;
+  deviceId: string;
+  spaceId: string;
+  toolId: string;
+  mode: GatewayToolApprovalGrantMode;
+  source: string;
+  reason: string;
+  grantedBy: string;
+  grantedAt: string;
+  expiresAt?: string;
+  revokedAt?: string;
+  updatedAt: string;
+}
+
+export interface GatewayListToolsPayload {
+  apiVersion?: string;
+}
+
+export interface GatewayGetToolPayload {
+  apiVersion?: string;
+  toolId: string;
+}
+
+export interface GatewayScaffoldToolPayload {
+  apiVersion?: string;
+  id: string;
+  displayName: string;
+  description: string;
+  outputMode: GatewayToolOutputMode;
+}
+
+export interface GatewayRegisterToolPayload {
+  apiVersion?: string;
+  schemaVersion?: number;
+  id: string;
+  displayName: string;
+  description: string;
+  bundleId?: string;
+  bundleDisplayName?: string;
+  bundleDescription?: string;
+  toolGroupId?: string;
+  toolGroupDisplayName?: string;
+  executable: string;
+  argsTemplate: string[];
+  inputSchema: Record<string, unknown>;
+  instructions?: string;
+  examples?: GatewayToolExample[];
+  timeoutMs?: number;
+  maxOutputBytes?: number;
+  cwdMode: GatewayToolCwdMode;
+  fixedCwd?: string;
+  outputMode: GatewayToolOutputMode;
+  dangerLevel?: GatewayToolDangerLevel;
+  readme?: string;
+}
+
+export interface GatewayRemoveToolPayload {
+  apiVersion?: string;
+  toolId: string;
+}
+
+export interface GatewayScaffoldedToolBundle {
+  manifest: GatewayRegisterToolPayload;
+  readme: string;
+}
+
+export interface GatewayListToolsResponsePayload {
+  tools: GatewayTool[];
+}
+
+export interface GatewayGetToolResponsePayload {
+  tool: GatewayTool | null;
+}
+
+export interface GatewayScaffoldToolResponsePayload {
+  manifest: GatewayRegisterToolPayload;
+  readme: string;
+}
+
+export interface GatewayRegisterToolResponsePayload {
+  tool: GatewayTool;
+}
+
+export interface GatewayRemoveToolResponsePayload {
+  toolId: string;
+  removed: boolean;
+}
+
+export interface GatewayListToolApprovalGrantsPayload {
+  apiVersion?: string;
+  principalId?: string;
+  deviceId?: string;
+  spaceId?: string;
+  toolId?: string;
+  includeRevoked?: boolean;
+  includeExpired?: boolean;
+}
+
+export interface GatewayListToolApprovalGrantsResponsePayload {
+  grants: GatewayToolApprovalGrant[];
+}
+
+export interface GatewayRevokeToolApprovalGrantPayload {
+  apiVersion?: string;
+  principalId?: string;
+  deviceId?: string;
+  spaceId: string;
+  toolId: string;
+  reason?: string;
+}
+
+export interface GatewayRevokeToolApprovalGrantResult {
+  revoked: boolean;
+  toolId: string;
+  spaceId: string;
+  grant?: GatewayToolApprovalGrant;
+}
+
+export type GatewayExternalConnectivityMode = "DISABLED" | "TAILSCALE";
+
+export type GatewayExternalConnectivityState =
+  | "disabled"
+  | "unsupported"
+  | "missing_dependency"
+  | "logged_out"
+  | "serve_missing"
+  | "ready"
+  | "error";
+
+export interface GatewayExternalConnectivitySettings {
+  mode: GatewayExternalConnectivityMode;
+  updatedAt: string;
+}
+
+export interface GatewayExternalConnectivityAdvertisedEndpoint {
+  provider: "tailscale";
+  label: string;
+  host: string;
+  port: number;
+  websocketUrl: string;
+  healthUrl: string;
+}
+
+export interface GatewayExternalConnectivityTailscaleStatus {
+  cliAvailable: boolean;
+  version?: string;
+  backendState?: string;
+  health: string[];
+  hostName?: string;
+  dnsName?: string;
+  magicDnsSuffix?: string;
+  tailscaleIps: string[];
+  serveConfigured: boolean;
+  serveTarget?: string;
+  servePort?: number;
+}
+
+export interface GatewayExternalConnectivityStatus {
+  state: GatewayExternalConnectivityState;
+  summary: string;
+  remediation?: string;
+  advertisedEndpoints: GatewayExternalConnectivityAdvertisedEndpoint[];
+  tailscaleStatus?: GatewayExternalConnectivityTailscaleStatus;
+}
+
+export interface GatewayGetExternalConnectivityPayload {
+  apiVersion?: string;
+}
+
+export interface GatewayGetExternalConnectivityResponsePayload {
+  settings: GatewayExternalConnectivitySettings;
+  status: GatewayExternalConnectivityStatus;
+}
+
+export interface GatewaySetExternalConnectivityPayload {
+  apiVersion?: string;
+  mode: GatewayExternalConnectivityMode;
+}
+
+export interface GatewaySetExternalConnectivityResponsePayload {
+  settings: GatewayExternalConnectivitySettings;
+  status: GatewayExternalConnectivityStatus;
+}
+
+export interface GatewayFactoryResetPayload {
+  apiVersion?: string;
+  confirmation: string;
+}
+
+export interface GatewayFactoryResetResponsePayload {
+  gatewayId: string;
+  gatewayUuid?: string;
+  resetAt: string;
+  tablesCleared: number;
+  rowsDeleted: number;
+}
+
+export interface SpaceResetPayload {
+  apiVersion?: string;
+  spaceId: string;
+}
+
+export interface SpaceResetResponsePayload {
+  spaceId: string;
+  resetAt: string;
+  tablesCleared: number;
+  rowsDeleted: number;
+}
+
 export interface VoiceUsageWindowSummary {
   sttSeconds: number;
   ttsChars: number;
@@ -1212,8 +2482,31 @@ export interface VoiceUsageWindowSummary {
   estimatedCostUsd: number;
 }
 
+export type VoiceProviderSource =
+  | 'managed'
+  | 'byok'
+  | 'local_model'
+  | 'apple_speech'
+  | 'unknown';
+
+export type VoiceChannel = 'stt' | 'tts';
+
+export type VoiceProviderHealthStatus =
+  | 'unknown'
+  | 'healthy'
+  | 'degraded'
+  | 'unavailable';
+
 export interface VoiceUsageSourceSummary extends VoiceUsageWindowSummary {
-  source: 'managed' | 'byok' | 'local_model' | 'apple_speech' | 'unknown';
+  source: VoiceProviderSource;
+  usage?: VoiceUsageWindowSummary;
+}
+
+export interface VoiceUsageProviderSummary {
+  channel: VoiceChannel;
+  source: VoiceProviderSource;
+  providerId: string;
+  usage: VoiceUsageWindowSummary;
 }
 
 export interface VoiceUsageLockSummary {
@@ -1235,6 +2528,7 @@ export interface VoiceUsageSnapshot {
   };
   bySource: VoiceUsageSourceSummary[];
   lock?: VoiceUsageLockSummary;
+  byProvider?: VoiceUsageProviderSummary[];
 }
 
 export interface UsageSnapshot {
@@ -1273,7 +2567,7 @@ export interface OrchestratorCommandPayload {
   apiVersion?: string;
   correlationId?: string;
   idempotencyKey?: string;
-  commandType: 'create_room' | 'add_agent' | 'share_context' | 'run_space_prompt';
+  commandType: 'list_spaces' | 'create_space' | 'list_skills' | 'create_skill' | 'handoff_space' | 'add_agent' | 'share_context' | 'run_space_prompt';
   targetSpaceId?: string;
   targetAgentId?: string;
   payload?: Record<string, unknown>;
@@ -1349,6 +2643,9 @@ export type SchedulerRunStatus = 'running' | 'completed' | 'failed' | 'skipped';
 export type SchedulerRunTrigger = 'scheduled' | 'manual';
 export type SchedulerScheduleKind = 'hourly' | 'daily' | 'weekly';
 export type SchedulerActionType = 'space_prompt';
+export type SchedulerExecutionTargetMode = 'existing_space' | 'new_space';
+export type SchedulerCalendarSyncStatus = 'pending' | 'synced' | 'error';
+export type SchedulerCalendarDriftStatus = 'none' | 'drifted';
 
 export interface SchedulerSchedulePreset {
   kind: SchedulerScheduleKind;
@@ -1362,6 +2659,20 @@ export interface SchedulerAction {
   type: SchedulerActionType;
   promptText: string;
   targetAgentId?: string;
+}
+
+export interface SchedulerExecutionTarget {
+  mode: SchedulerExecutionTargetMode;
+}
+
+export interface SchedulerCalendarBinding {
+  providerId: string;
+  calendarId: string;
+  eventId?: string;
+  syncStatus?: SchedulerCalendarSyncStatus;
+  driftStatus?: SchedulerCalendarDriftStatus;
+  driftMessage?: string;
+  lastSyncedAt?: string;
 }
 
 export interface SchedulerLinkedSpace {
@@ -1392,6 +2703,8 @@ export interface SchedulerJob {
   createdAt: string;
   updatedAt: string;
   linkedSpaces: SchedulerLinkedSpace[];
+  executionTarget: SchedulerExecutionTarget;
+  calendarBinding?: SchedulerCalendarBinding;
 }
 
 export interface SchedulerJobRun {
@@ -1418,6 +2731,8 @@ export interface SchedulerCreateJobPayload {
   action: SchedulerAction;
   primarySpaceId: string;
   relatedSpaceIds?: string[];
+  executionTarget?: SchedulerExecutionTarget;
+  calendarBinding?: SchedulerCalendarBinding;
 }
 
 export interface SchedulerGetJobPayload {
@@ -1443,6 +2758,8 @@ export interface SchedulerUpdateJobPayload {
   action?: SchedulerAction;
   primarySpaceId?: string | null;
   relatedSpaceIds?: string[];
+  executionTarget?: SchedulerExecutionTarget;
+  calendarBinding?: SchedulerCalendarBinding | null;
 }
 
 export interface SchedulerDeleteJobPayload {
@@ -1698,11 +3015,15 @@ export interface SyncPullResourcesResult {
 export interface SpeechStartPayload {
   apiVersion?: string;
   spaceId: string;
-  spaceUid: string;
+  spaceUid?: string;
   sessionId?: string;
+  locale?: string;
+  sourceDevice?: string;
+  enableTranscription?: boolean;
+  enablePlayback?: boolean;
   agentId?: string;
   autoSubmitTurns?: boolean;
-  preferredSource?: 'managed' | 'byok' | 'local_model' | 'apple_speech';
+  preferredSource?: Exclude<VoiceProviderSource, 'unknown'>;
   preferredProviderId?: string;
   byokProviderId?: string;
   localModelProviderId?: string;
@@ -1710,18 +3031,25 @@ export interface SpeechStartPayload {
   allowByokFallback?: boolean;
   allowLocalFallback?: boolean;
   allowAppleSpeechFallback?: boolean;
+  sttPreferences?: SpeechRoutePreferencesPayload;
+  ttsPreferences?: SpeechRoutePreferencesPayload;
 }
 
 export interface SpeechAudioChunkPayload {
   apiVersion?: string;
   sessionId: string;
   sequence: number;
+  sequenceNo?: number;
   audioBase64: string;
+  sampleRateHz?: number;
+  channels?: number;
+  codec?: string;
   audioDurationSeconds?: number;
   ttsChars?: number;
   ttsSeconds?: number;
   transcriptText?: string;
   isFinal?: boolean;
+  engineMetrics?: SpeechEngineMetricsPayload;
 }
 
 export interface SpeechControlPayload {
@@ -1731,13 +3059,75 @@ export interface SpeechControlPayload {
   reason?: string;
 }
 
+export interface SpeechEngineMetricsPayload {
+  vadDetectionMs?: number;
+  sttTranscriptionMs?: number;
+  ttsFirstAudioMs?: number;
+  ttsFullSynthesisMs?: number;
+}
+
+export interface SpeechRoutePreferencesPayload {
+  channel: VoiceChannel;
+  preferredSource?: Exclude<VoiceProviderSource, 'unknown'>;
+  preferredProviderId?: string;
+  byokProviderId?: string;
+  localModelProviderId?: string;
+  appleSpeechProviderId?: string;
+  allowByokFallback?: boolean;
+  allowLocalFallback?: boolean;
+  allowAppleSpeechFallback?: boolean;
+}
+
+export interface VoiceRoutePayload {
+  channel: VoiceChannel;
+  source: Exclude<VoiceProviderSource, 'unknown'>;
+  providerId: string;
+}
+
+export interface VoiceProviderConfigPayload {
+  providerId: string;
+  channel: VoiceChannel;
+  source: Exclude<VoiceProviderSource, 'unknown'>;
+  priority: number;
+  healthStatus: VoiceProviderHealthStatus;
+  costProfile?: string;
+}
+
+export interface VoiceLockDecisionPayload {
+  channel: VoiceChannel;
+  source: Exclude<VoiceProviderSource, 'unknown'>;
+  allowed: boolean;
+  reason: string;
+  retryAt?: string;
+  fallbackHint?: string;
+}
+
+export interface VoiceFallbackEventPayload {
+  channel: VoiceChannel;
+  fromRoute?: VoiceRoutePayload;
+  toRoute?: VoiceRoutePayload;
+  reason: 'default' | 'manual_override' | 'quota_fallback' | 'local_forced';
+  detail?: string;
+}
+
+export interface VoiceIntentDecisionPayload {
+  intentType: 'space_content' | 'orchestration_command' | 'clarification_required';
+  confidence: number;
+  rationale?: string;
+  clarificationPrompt?: string;
+  capabilityId?: string;
+}
+
 export interface SpeechEventPayload {
   sessionId: string;
   spaceId: string;
   spaceUid: string;
+  type?: string;
+  message?: string;
+  intent?: VoiceIntentDecisionPayload;
   state: 'idle' | 'running' | 'stopped' | 'interrupted' | 'ended';
   eventType: string;
-  providerSource?: 'managed' | 'byok' | 'local_model' | 'apple_speech';
+  providerSource?: Exclude<VoiceProviderSource, 'unknown'>;
   providerId?: string;
   fallbackReason?: 'default' | 'manual_override' | 'quota_fallback' | 'local_forced';
   usage?: {
@@ -1749,7 +3139,15 @@ export interface SpeechEventPayload {
   transcript?: string;
   turnId?: string;
   sequence?: number;
+  sequenceNo?: number;
   reason?: string;
+  emittedAt?: string;
+  sttRoute?: VoiceRoutePayload;
+  ttsRoute?: VoiceRoutePayload;
+  lockDecision?: VoiceLockDecisionPayload;
+  fallbackEvent?: VoiceFallbackEventPayload;
+  providerConfigs?: VoiceProviderConfigPayload[];
+  engineMetrics?: SpeechEngineMetricsPayload;
   ts: string;
 }
 
@@ -1762,6 +3160,8 @@ export interface TurnResult {
   output?: string;
   status: 'completed' | 'pending_feedback' | 'failed';
   error?: string;
+  mode?: TurnMode;
+  effort?: TurnEffort;
 }
 
 /**
@@ -2030,6 +3430,7 @@ export class GatewayClient {
   private async sendAndWaitForResponse<T, R>(
     type: string,
     payload: T,
+    timeoutMs: number = this.requestTimeoutMs,
   ): Promise<R> {
     return new Promise((resolve, reject) => {
       this.send(type, payload)
@@ -2037,7 +3438,7 @@ export class GatewayClient {
           const timeout = setTimeout(() => {
             this.pendingRequests.delete(messageId);
             reject(new Error(`Request timeout: ${type}`));
-          }, this.requestTimeoutMs);
+          }, timeoutMs);
 
           this.pendingRequests.set(messageId, {
             resolve: resolve as (value: unknown) => void,
@@ -2238,12 +3639,27 @@ export class GatewayClient {
 
     const data = candidate.data ?? candidate.event ?? null;
 
+    const rootTurnId = this.pickNonEmptyString(candidate.rootTurnId);
+    const agentId = this.pickNonEmptyString(candidate.agentId);
+    const conversationTopology = this.pickNonEmptyString(candidate.conversationTopology) as TurnEventPayload['conversationTopology'];
+    const transcriptVisibility = this.pickNonEmptyString(candidate.transcriptVisibility) as TurnEventPayload['transcriptVisibility'];
+    const typedPayload = candidate.typedPayload && typeof candidate.typedPayload === 'object' && 'kind' in (candidate.typedPayload as Record<string, unknown>)
+      ? candidate.typedPayload as TypedTurnEventPayload
+      : undefined;
+    const ts = this.pickNonEmptyString(candidate.ts);
+
     return {
       spaceId,
       spaceUid,
       turnId,
+      rootTurnId,
+      agentId,
+      conversationTopology,
+      transcriptVisibility,
       eventType: mappedEventType,
       data,
+      typedPayload,
+      ts,
     };
   }
 
@@ -2343,6 +3759,17 @@ export class GatewayClient {
     return fallback;
   }
 
+  private normalizeSpaceTurnTrace(trace: SpaceTurnTrace): SpaceTurnTrace {
+    return {
+      ...trace,
+      events: Array.isArray(trace.events) ? trace.events : [],
+      toolCalls: Array.isArray(trace.toolCalls) ? trace.toolCalls : [],
+      activities: Array.isArray(trace.activities) ? trace.activities : [],
+      executionRuns: Array.isArray(trace.executionRuns) ? trace.executionRuns : [],
+      artifactIds: Array.isArray(trace.artifactIds) ? trace.artifactIds : [],
+    };
+  }
+
   /**
    * Handle adapter capability invocation.
    */
@@ -2381,16 +3808,34 @@ export class GatewayClient {
   /**
    * Execute a turn in a space
    */
+  async executeTurn(options: ExecuteTurnOptions): Promise<TurnResult>;
   async executeTurn(
-    spaceId: string,
+    spaceUid: string,
     input: string,
     targetAgentId?: string,
+  ): Promise<TurnResult>;
+  async executeTurn(
+    optionsOrSpaceUid: ExecuteTurnOptions | string,
+    input?: string,
+    targetAgentId?: string,
   ): Promise<TurnResult> {
+    const options: ExecuteTurnOptions = typeof optionsOrSpaceUid === 'string'
+      ? {
+          spaceUid: optionsOrSpaceUid,
+          input: input ?? '',
+          targetAgentId,
+        }
+      : optionsOrSpaceUid;
     const payload: ExecuteTurnPayload = {
-      spaceUid: spaceId,
-      spaceId,
-      input,
-      targetAgentId,
+      spaceUid: options.spaceUid,
+      input: options.input,
+      targetAgentId: options.targetAgentId,
+      targetAgentIds: options.targetAgentIds,
+      replyToTurnId: options.replyToTurnId,
+      conversationTopology: options.conversationTopology,
+      mode: options.mode,
+      effort: options.effort,
+      accessMode: options.accessMode,
     };
 
     const result = await this.sendAndWaitForResponse<
@@ -2480,17 +3925,18 @@ export class GatewayClient {
    * Resume a turn with feedback
    */
   async resumeFeedback(
-    spaceId: string,
+    spaceUid: string,
     turnId: string,
     response: 'approve' | 'reject' | 'revise' | 'defer',
     revision?: string,
+    approvalGrant?: ApprovalGrantPayload,
   ): Promise<void> {
     const payload: ResumeFeedbackPayload = {
-      spaceUid: spaceId,
-      spaceId,
+      spaceUid,
       turnId,
       response,
       revision,
+      approvalGrant,
     };
 
     await this.sendAndWaitForResponse<ResumeFeedbackPayload, void>(
@@ -2502,10 +3948,9 @@ export class GatewayClient {
   /**
    * Subscribe to space events
    */
-  async subscribe(spaceIds: string[]): Promise<void> {
+  async subscribe(spaceUids: string[]): Promise<void> {
     const payload: SubscribePayload = {
-      spaceUids: spaceIds,
-      spaceIds,
+      spaceUids,
     };
     await this.sendAndWaitForResponse<SubscribePayload, void>(
       'subscribe',
@@ -2568,6 +4013,26 @@ export class GatewayClient {
       SpaceListResponsePayload
     >('space.list', payload);
     return result.spaces;
+  }
+
+  /**
+   * Archive a space on the gateway.
+   */
+  async archiveSpace(payload: SpaceArchivePayload): Promise<SpaceArchiveResponsePayload> {
+    return this.sendAndWaitForResponse<
+      SpaceArchivePayload,
+      SpaceArchiveResponsePayload
+    >('space.archive', payload);
+  }
+
+  /**
+   * Soft-delete a space on the gateway.
+   */
+  async deleteSpace(payload: SpaceDeletePayload): Promise<SpaceDeleteResponsePayload> {
+    return this.sendAndWaitForResponse<
+      SpaceDeletePayload,
+      SpaceDeleteResponsePayload
+    >('space.delete', payload);
   }
 
   /**
@@ -2805,80 +4270,378 @@ export class GatewayClient {
     >("space.list_orchestration_journal", payload);
   }
 
-  /**
-   * Create a profile in gateway persistence.
-   */
-  async createProfile(payload: ProfileCreatePayload): Promise<ProfileCreateResponsePayload> {
-    return this.sendAndWaitForResponse<
-      ProfileCreatePayload,
-      ProfileCreateResponsePayload
-    >("profile.create", payload);
+  async getSpaceMemoryPolicy(
+    spaceId: string,
+    apiVersion?: string,
+  ): Promise<SpaceMemoryPolicy> {
+    const payload: SpaceGetMemoryPolicyPayload = { apiVersion, spaceId };
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetMemoryPolicyPayload,
+      SpaceGetMemoryPolicyResponsePayload
+    >("space.get_memory_policy", payload);
+    return result.memoryPolicy;
   }
 
-  /**
-   * Fetch one profile by ID.
-   */
-  async getProfile(profileId: string, apiVersion?: string): Promise<ProfileSummary> {
-    const payload: ProfileGetPayload = { apiVersion, profileId };
+  async setSpaceMemoryPolicy(
+    payload: SpaceSetMemoryPolicyPayload,
+  ): Promise<SpaceSummary> {
     const result = await this.sendAndWaitForResponse<
-      ProfileGetPayload,
-      ProfileGetResponsePayload
-    >("profile.get", payload);
+      SpaceSetMemoryPolicyPayload,
+      SpaceSetMemoryPolicyResponsePayload
+    >("space.set_memory_policy", payload);
+    return result.space;
+  }
+
+  async endIncognitoSession(
+    spaceId: string,
+    apiVersion?: string,
+  ): Promise<SpaceEndIncognitoSessionResponsePayload> {
+    const payload: SpaceEndIncognitoSessionPayload = { apiVersion, spaceId };
+    return this.sendAndWaitForResponse<
+      SpaceEndIncognitoSessionPayload,
+      SpaceEndIncognitoSessionResponsePayload
+    >("space.end_incognito_session", payload);
+  }
+
+  async listActivityLog(
+    payload: SpaceListActivityLogPayload,
+  ): Promise<SpaceListActivityLogResponsePayload> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceListActivityLogPayload,
+      SpaceListActivityLogResponsePayload
+    >("space.list_activity_log", payload);
+    return {
+      ...result,
+      entries: result.entries ?? [],
+      total: result.total ?? (result.entries?.length ?? 0),
+    };
+  }
+
+  async getTurnTrace(payload: SpaceGetTurnTracePayload): Promise<SpaceTurnTrace> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetTurnTracePayload,
+      SpaceGetTurnTraceResponsePayload | SpaceTurnTrace
+    >("space.get_turn_trace", payload);
+    const trace = 'trace' in result ? result.trace : result;
+    return this.normalizeSpaceTurnTrace(trace);
+  }
+
+  async listSpaceArtifacts(
+    payload: SpaceListArtifactsPayload,
+  ): Promise<SpaceListArtifactsResponsePayload> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceListArtifactsPayload,
+      SpaceListArtifactsResponsePayload
+    >("space.list_artifacts", payload);
+    return {
+      ...result,
+      artifacts: result.artifacts ?? [],
+      total: result.total ?? (result.artifacts?.length ?? 0),
+    };
+  }
+
+  async getSpaceArtifact(payload: SpaceGetArtifactPayload): Promise<SpaceArtifactDetail> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetArtifactPayload,
+      SpaceGetArtifactResponsePayload
+    >("space.get_artifact", payload);
+    return result.artifact;
+  }
+
+  async getSpaceDebugArtifact(payload: SpaceGetDebugArtifactPayload): Promise<SpaceArtifactDetail> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetDebugArtifactPayload,
+      SpaceGetDebugArtifactResponsePayload
+    >("space.get_debug_artifact", payload);
+    return result.artifact;
+  }
+
+  async listExperiences(
+    payload: SpaceListExperiencesPayload,
+  ): Promise<SpaceListExperiencesResponsePayload> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceListExperiencesPayload,
+      SpaceListExperiencesResponsePayload
+    >("space.list_experiences", payload);
+    return {
+      ...result,
+      experiences: result.experiences ?? [],
+      total: result.total ?? (result.experiences?.length ?? 0),
+    };
+  }
+
+  async getExperience(
+    payload: SpaceGetExperiencePayload,
+  ): Promise<SpaceExperienceRecord> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetExperiencePayload,
+      SpaceGetExperienceResponsePayload
+    >("space.get_experience", payload);
+    return result.experience;
+  }
+
+  async listInsights(
+    payload: SpaceListInsightsPayload,
+  ): Promise<SpaceListInsightsResponsePayload> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceListInsightsPayload,
+      SpaceListInsightsResponsePayload
+    >("space.list_insights", payload);
+    return {
+      ...result,
+      insights: result.insights ?? [],
+      total: result.total ?? (result.insights?.length ?? 0),
+    };
+  }
+
+  async getInsight(payload: SpaceGetInsightPayload): Promise<SpacePersonalityInsightRecord> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetInsightPayload,
+      SpaceGetInsightResponsePayload
+    >("space.get_insight", payload);
+    return result.insight;
+  }
+
+  async acceptInsight(payload: SpaceAcceptInsightPayload): Promise<SpacePersonalityInsightRecord> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceAcceptInsightPayload,
+      SpaceInsightActionResponsePayload
+    >("space.accept_insight", payload);
+    return result.insight;
+  }
+
+  async rejectInsight(payload: SpaceRejectInsightPayload): Promise<SpacePersonalityInsightRecord> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceRejectInsightPayload,
+      SpaceInsightActionResponsePayload
+    >("space.reject_insight", payload);
+    return result.insight;
+  }
+
+  async dismissInsight(payload: SpaceDismissInsightPayload): Promise<SpacePersonalityInsightRecord> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceDismissInsightPayload,
+      SpaceInsightActionResponsePayload
+    >("space.dismiss_insight", payload);
+    return result.insight;
+  }
+
+  async getSpaceAgentNotes(
+    payload: SpaceGetSpaceAgentNotesPayload,
+  ): Promise<SpaceAgentNotesRecord | null | undefined> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetSpaceAgentNotesPayload,
+      SpaceAgentNotesResponsePayload
+    >("space.get_space_agent_notes", payload);
+    return result.notes;
+  }
+
+  async updateSpaceAgentNotes(
+    payload: SpaceUpdateSpaceAgentNotesPayload,
+  ): Promise<SpaceAgentNotesRecord | null | undefined> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceUpdateSpaceAgentNotesPayload,
+      SpaceAgentNotesResponsePayload
+    >("space.update_space_agent_notes", payload);
+    return result.notes;
+  }
+
+  async getUserProfile(
+    payload: SpaceGetUserProfilePayload = {},
+  ): Promise<SpaceUserProfileRecord | null | undefined> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceGetUserProfilePayload,
+      SpaceUserProfileResponsePayload
+    >("space.get_user_profile", payload);
     return result.profile;
   }
 
-  /**
-   * List profiles, optionally including archived entries.
-   */
-  async listProfiles(payload: ProfileListPayload = {}): Promise<ProfileSummary[]> {
+  async updateUserProfile(
+    payload: SpaceUpdateUserProfilePayload,
+  ): Promise<SpaceUserProfileRecord | null | undefined> {
     const result = await this.sendAndWaitForResponse<
-      ProfileListPayload,
-      ProfileListResponsePayload
-    >("profile.list", payload);
-    return result.profiles;
+      SpaceUpdateUserProfilePayload,
+      SpaceUserProfileResponsePayload
+    >("space.update_user_profile", payload);
+    return result.profile;
+  }
+
+  async listMemories(
+    payload: SpaceListMemoriesPayload,
+  ): Promise<SpaceListMemoriesResponsePayload> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceListMemoriesPayload,
+      SpaceListMemoriesResponsePayload
+    >("space.list_memories", payload);
+    return {
+      ...result,
+      memories: result.memories ?? [],
+      total: result.total ?? (result.memories?.length ?? 0),
+    };
+  }
+
+  async deleteMemory(
+    payload: SpaceDeleteMemoryPayload,
+  ): Promise<SpaceDeleteMemoryResponsePayload> {
+    return this.sendAndWaitForResponse<
+      SpaceDeleteMemoryPayload,
+      SpaceDeleteMemoryResponsePayload
+    >("space.delete_memory", payload);
+  }
+
+  async updateMemoryImportance(
+    payload: SpaceUpdateMemoryImportancePayload,
+  ): Promise<SpaceMemoryRecord> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceUpdateMemoryImportancePayload,
+      SpaceUpdateMemoryImportanceResponsePayload
+    >("space.update_memory_importance", payload);
+    return result.memory;
   }
 
   /**
-   * Update a profile and create a new active revision.
+   * List agent definitions, optionally including archived entries.
    */
-  async updateProfile(payload: ProfileUpdatePayload): Promise<ProfileUpdateResponsePayload> {
-    return this.sendAndWaitForResponse<
-      ProfileUpdatePayload,
-      ProfileUpdateResponsePayload
-    >("profile.update", payload);
+  async listAgentDefinitions(
+    payload: IdentityListAgentDefinitionsPayload = {},
+  ): Promise<AgentDefinitionSummary[]> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityListAgentDefinitionsPayload,
+      IdentityListAgentDefinitionsResponsePayload
+    >("identity.list_agent_definitions", payload);
+    return result.agentDefinitions;
   }
 
   /**
-   * Archive a profile.
+   * Fetch one agent definition by ID.
    */
-  async archiveProfile(payload: ProfileArchivePayload): Promise<ProfileArchiveResponsePayload> {
-    return this.sendAndWaitForResponse<
-      ProfileArchivePayload,
-      ProfileArchiveResponsePayload
-    >("profile.archive", payload);
-  }
-
-  async listPresets(payload: PresetListPayload = {}): Promise<PresetSummary[]> {
+  async getAgentDefinition(
+    agentDefinitionId: string,
+    apiVersion?: string,
+  ): Promise<AgentDefinitionSummary> {
+    const payload: IdentityGetAgentDefinitionPayload = { apiVersion, agentDefinitionId };
     const result = await this.sendAndWaitForResponse<
-      PresetListPayload,
-      { presets: PresetSummary[] }
-    >('preset.list', payload);
-    return result.presets;
+      IdentityGetAgentDefinitionPayload,
+      IdentityGetAgentDefinitionResponsePayload
+    >("identity.get_agent_definition", payload);
+    return result.agentDefinition;
   }
 
-  async getPreset(payload: PresetGetPayload): Promise<PresetDetail> {
+  async createAgentDefinition(
+    payload: IdentityCreateAgentDefinitionPayload,
+  ): Promise<AgentDefinitionCreateResult> {
     const result = await this.sendAndWaitForResponse<
-      PresetGetPayload,
-      { preset: PresetDetail }
-    >('preset.get', payload);
-    return result.preset;
+      IdentityCreateAgentDefinitionPayload,
+      IdentityCreateAgentDefinitionResponsePayload
+    >("identity.create_agent_definition", payload);
+    return {
+      agentDefinition: result.agentDefinition,
+      created: result.created,
+    };
   }
 
-  async applyPresetToSpace(payload: PresetApplyToSpacePayload): Promise<PresetApplyToSpaceResult> {
-    return this.sendAndWaitForResponse<
-      PresetApplyToSpacePayload,
-      PresetApplyToSpaceResult
-    >('preset.apply_to_space', payload);
+  async updateAgentDefinition(
+    payload: IdentityUpdateAgentDefinitionPayload,
+  ): Promise<AgentDefinitionUpdateResult> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityUpdateAgentDefinitionPayload,
+      IdentityUpdateAgentDefinitionResponsePayload
+    >("identity.update_agent_definition", payload);
+    return {
+      agentDefinition: result.agentDefinition,
+      newRevision: result.newRevision,
+    };
+  }
+
+  async archiveAgentDefinition(
+    payload: IdentityArchiveAgentDefinitionPayload,
+  ): Promise<AgentDefinitionArchiveResult> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityArchiveAgentDefinitionPayload,
+      IdentityArchiveAgentDefinitionResponsePayload
+    >("identity.archive_agent_definition", payload);
+    return {
+      agentDefinition: result.agentDefinition,
+      archived: result.archived,
+    };
+  }
+
+  async listPersonas(payload: IdentityListPersonasPayload = {}): Promise<PersonaSummary[]> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityListPersonasPayload,
+      IdentityListPersonasResponsePayload
+    >("identity.list_personas", payload);
+    return result.personas;
+  }
+
+  async getPersona(personaId: string, apiVersion?: string): Promise<PersonaSummary> {
+    const payload: IdentityGetPersonaPayload = { apiVersion, personaId };
+    const result = await this.sendAndWaitForResponse<
+      IdentityGetPersonaPayload,
+      IdentityGetPersonaResponsePayload
+    >("identity.get_persona", payload);
+    return result.persona;
+  }
+
+  async createPersona(payload: IdentityCreatePersonaPayload): Promise<PersonaCreateResult> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityCreatePersonaPayload,
+      IdentityCreatePersonaResponsePayload
+    >("identity.create_persona", payload);
+    return { persona: result.persona, created: result.created };
+  }
+
+  async updatePersona(payload: IdentityUpdatePersonaPayload): Promise<PersonaUpdateResult> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityUpdatePersonaPayload,
+      IdentityUpdatePersonaResponsePayload
+    >("identity.update_persona", payload);
+    return { persona: result.persona, newRevision: result.newRevision };
+  }
+
+  async archivePersona(payload: IdentityArchivePersonaPayload): Promise<PersonaArchiveResult> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityArchivePersonaPayload,
+      IdentityArchivePersonaResponsePayload
+    >("identity.archive_persona", payload);
+    return { persona: result.persona, archived: result.archived };
+  }
+
+  async previewCompiledInstructions(
+    agentDefinitionId: string,
+    apiVersion?: string,
+    workspaceContext?: string,
+  ): Promise<CompiledInstructionsPreview> {
+    const payload: IdentityPreviewCompiledInstructionsPayload = {
+      apiVersion,
+      agentDefinitionId,
+      workspaceContext,
+    };
+    const result = await this.sendAndWaitForResponse<
+      IdentityPreviewCompiledInstructionsPayload,
+      IdentityPreviewCompiledInstructionsResponsePayload
+    >("identity.preview_compiled_instructions", payload);
+    return result.preview;
+  }
+
+  async previewRuntimeSystemPrompt(
+    payload: IdentityPreviewRuntimeSystemPromptPayload,
+  ): Promise<RuntimeSystemPromptPreview> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityPreviewRuntimeSystemPromptPayload,
+      IdentityPreviewRuntimeSystemPromptResponsePayload
+    >("identity.preview_runtime_system_prompt", payload);
+    return result.preview;
+  }
+
+  async previewSystemPromptMatrix(
+    payload: IdentityPreviewSystemPromptMatrixPayload,
+  ): Promise<SystemPromptMatrix> {
+    const result = await this.sendAndWaitForResponse<
+      IdentityPreviewSystemPromptMatrixPayload,
+      IdentityPreviewSystemPromptMatrixResponsePayload
+    >("identity.preview_system_prompt_matrix", payload);
+    return result.matrix;
   }
 
   async previewTemplate(payload: SpacePreviewTemplatePayload): Promise<SpacePreviewTemplateResult> {
@@ -2902,6 +4665,100 @@ export class GatewayClient {
       SpaceSaveTemplatePayload,
       SpaceSaveTemplateResult
     >('space.save_template', payload);
+  }
+
+  async listSpaceTemplates(payload: SpaceTemplateListPayload = {}): Promise<SpaceTemplateRecord[]> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceTemplateListPayload,
+      SpaceTemplateListResponsePayload
+    >("space.list_templates", payload);
+    return result.templates;
+  }
+
+  async getSpaceTemplate(templateId: string, apiVersion?: string): Promise<SpaceTemplateRecord> {
+    const payload: SpaceTemplateGetPayload = { apiVersion, templateId };
+    const result = await this.sendAndWaitForResponse<
+      SpaceTemplateGetPayload,
+      SpaceTemplateGetResponsePayload
+    >("space.get_template", payload);
+    return result.template;
+  }
+
+  async previewSpaceTemplateRecord(
+    payload: SpaceTemplatePreviewPayload,
+  ): Promise<SpaceTemplatePreviewResult> {
+    const [template, result] = await Promise.all([
+      this.getSpaceTemplate(payload.templateId, payload.apiVersion),
+      this.previewTemplate({
+        apiVersion: payload.apiVersion,
+        templateId: payload.templateId,
+        resourceId: payload.resourceId,
+        name: payload.name,
+        goal: payload.goal,
+      }),
+    ]);
+    return {
+      template,
+      resolved: result.resolved,
+      warnings: result.warnings,
+    };
+  }
+
+  async createSpaceFromManagedTemplate(
+    payload: SpaceTemplateCreateSpacePayload,
+  ): Promise<SpaceTemplateCreateSpaceResult> {
+    const [template, result] = await Promise.all([
+      this.getSpaceTemplate(payload.templateId, payload.apiVersion),
+      this.createSpaceFromTemplate({
+        apiVersion: payload.apiVersion,
+        idempotencyKey: payload.idempotencyKey,
+        templateId: payload.templateId,
+        spaceId: payload.spaceId,
+        resourceId: payload.resourceId,
+        name: payload.name,
+        goal: payload.goal,
+        visibility: payload.visibility,
+        workspaceRoot: payload.workspaceRoot,
+      }),
+    ]);
+    return {
+      template,
+      space: result.space,
+    };
+  }
+
+  async saveManagedSpaceTemplate(
+    payload: SpaceTemplateSavePayload,
+  ): Promise<SpaceTemplateSaveResult> {
+    const result = await this.saveSpaceTemplate({
+      apiVersion: payload.apiVersion,
+      templateId: payload.templateId,
+      title: payload.name,
+      description: payload.description,
+      communicationMode: payload.communicationMode,
+      conversationTopology: payload.conversationTopology,
+      promptPackId: payload.promptPackId,
+      baseAgents: payload.baseAgents,
+      sourceSpaceId: payload.sourceSpaceId,
+    });
+    const template = await this.getSpaceTemplate(result.template.templateId, payload.apiVersion);
+    return {
+      template,
+      created: result.created,
+    };
+  }
+
+  async archiveSpaceTemplate(
+    payload: SpaceTemplateArchivePayload,
+  ): Promise<SpaceTemplateArchiveResult> {
+    const result = await this.sendAndWaitForResponse<
+      SpaceTemplateArchivePayload,
+      SpaceTemplateArchiveResponsePayload
+    >("space.archive_template", payload);
+    return {
+      template: result.template,
+      archived: result.archived,
+    };
   }
 
   async registerDevice(payload: AuthRegisterDevicePayload): Promise<AuthRegisterDeviceResult> {
@@ -2974,6 +4831,129 @@ export class GatewayClient {
     return result.telemetry;
   }
 
+  async getMemoryDefaults(apiVersion?: string): Promise<GatewayMemoryDefaults> {
+    const payload: GatewayGetMemoryDefaultsPayload = { apiVersion };
+    const result = await this.sendAndWaitForResponse<
+      GatewayGetMemoryDefaultsPayload,
+      GatewayGetMemoryDefaultsResponsePayload
+    >("gateway.get_memory_defaults", payload);
+    return result.defaults;
+  }
+
+  async setMemoryDefaults(
+    defaultExperienceCapture: SpaceExperienceCaptureMode,
+    defaultSpacePrivacyMode: SpacePrivacyMode = 'STANDARD',
+    apiVersion?: string,
+  ): Promise<GatewayMemoryDefaults> {
+    const payload: GatewaySetMemoryDefaultsPayload = {
+      apiVersion,
+      defaultExperienceCapture,
+      defaultSpacePrivacyMode,
+    };
+    const result = await this.sendAndWaitForResponse<
+      GatewaySetMemoryDefaultsPayload,
+      GatewaySetMemoryDefaultsResponsePayload
+    >("gateway.set_memory_defaults", payload);
+    return result.defaults;
+  }
+
+  async listTools(apiVersion?: string): Promise<GatewayTool[]> {
+    const payload: GatewayListToolsPayload = { apiVersion };
+    const result = await this.sendAndWaitForResponse<
+      GatewayListToolsPayload,
+      GatewayListToolsResponsePayload
+    >("tool.list", payload);
+    return result.tools;
+  }
+
+  async getTool(
+    toolId: string,
+    apiVersion?: string,
+  ): Promise<GatewayTool | null> {
+    const payload: GatewayGetToolPayload = { apiVersion, toolId };
+    const result = await this.sendAndWaitForResponse<
+      GatewayGetToolPayload,
+      GatewayGetToolResponsePayload
+    >("tool.get", payload);
+    return result.tool;
+  }
+
+  async scaffoldTool(
+    payload: GatewayScaffoldToolPayload,
+  ): Promise<GatewayScaffoldedToolBundle> {
+    const result = await this.sendAndWaitForResponse<
+      GatewayScaffoldToolPayload,
+      GatewayScaffoldToolResponsePayload
+    >("tool.scaffold", payload);
+    return {
+      manifest: result.manifest,
+      readme: result.readme,
+    };
+  }
+
+  async registerTool(
+    payload: GatewayRegisterToolPayload,
+  ): Promise<GatewayTool> {
+    const result = await this.sendAndWaitForResponse<
+      GatewayRegisterToolPayload,
+      GatewayRegisterToolResponsePayload
+    >("tool.register", payload);
+    return result.tool;
+  }
+
+  async removeTool(
+    toolId: string,
+    apiVersion?: string,
+  ): Promise<boolean> {
+    const payload: GatewayRemoveToolPayload = { apiVersion, toolId };
+    const result = await this.sendAndWaitForResponse<
+      GatewayRemoveToolPayload,
+      GatewayRemoveToolResponsePayload
+    >("tool.remove", payload);
+    return result.removed;
+  }
+
+  async listToolApprovalGrants(
+    payload: GatewayListToolApprovalGrantsPayload = {},
+  ): Promise<GatewayToolApprovalGrant[]> {
+    const result = await this.sendAndWaitForResponse<
+      GatewayListToolApprovalGrantsPayload,
+      GatewayListToolApprovalGrantsResponsePayload
+    >("tool.list_grants", payload);
+    return result.grants;
+  }
+
+  async revokeToolApprovalGrant(
+    payload: GatewayRevokeToolApprovalGrantPayload,
+  ): Promise<GatewayRevokeToolApprovalGrantResult> {
+    return this.sendAndWaitForResponse<
+      GatewayRevokeToolApprovalGrantPayload,
+      GatewayRevokeToolApprovalGrantResult
+    >("tool.revoke_grant", payload);
+  }
+
+  async getExternalConnectivity(
+    apiVersion?: string,
+  ): Promise<GatewayGetExternalConnectivityResponsePayload> {
+    return this.sendAndWaitForResponse<
+      GatewayGetExternalConnectivityPayload,
+      GatewayGetExternalConnectivityResponsePayload
+    >("gateway.get_external_connectivity", { apiVersion });
+  }
+
+  async setExternalConnectivity(
+    mode: GatewayExternalConnectivityMode,
+    apiVersion?: string,
+  ): Promise<GatewaySetExternalConnectivityResponsePayload> {
+    return this.sendAndWaitForResponse<
+      GatewaySetExternalConnectivityPayload,
+      GatewaySetExternalConnectivityResponsePayload
+    >("gateway.set_external_connectivity", {
+      apiVersion,
+      mode,
+    });
+  }
+
   /**
    * Get current gateway-wide capability/skill policy.
    */
@@ -2996,6 +4976,130 @@ export class GatewayClient {
       { policy: GatewayPolicy }
     >('gateway.update_policy', payload);
     return result.policy;
+  }
+
+  async factoryResetGateway(
+    payload: GatewayFactoryResetPayload,
+  ): Promise<GatewayFactoryResetResponsePayload> {
+    return this.sendAndWaitForResponse<
+      GatewayFactoryResetPayload,
+      GatewayFactoryResetResponsePayload
+    >('gateway.factory_reset', payload, this.minimumRequestTimeout(180_000));
+  }
+
+  async resetSpace(
+    payload: SpaceResetPayload,
+  ): Promise<SpaceResetResponsePayload> {
+    return this.sendAndWaitForResponse<
+      SpaceResetPayload,
+      SpaceResetResponsePayload
+    >('space.reset', payload, this.minimumRequestTimeout(180_000));
+  }
+
+  async listLibraryEntries(payload: LibraryListEntriesPayload = {}): Promise<LibraryEntry[]> {
+    const result = await this.sendAndWaitForResponse<
+      LibraryListEntriesPayload,
+      LibraryListEntriesResponsePayload
+    >("library.list_entries", payload);
+    return result.entries;
+  }
+
+  async getLibraryEntry(
+    entryId: string,
+    apiVersion?: string,
+    includeContent?: boolean,
+  ): Promise<LibraryEntry> {
+    const payload: LibraryGetEntryPayload = { apiVersion, entryId, includeContent };
+    const result = await this.sendAndWaitForResponse<
+      LibraryGetEntryPayload,
+      LibraryGetEntryResponsePayload
+    >("library.get_entry", payload);
+    return result.entry;
+  }
+
+  async saveLibrarySkill(payload: LibrarySaveSkillPayload): Promise<LibrarySaveSkillResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibrarySaveSkillPayload,
+      LibrarySaveSkillResponsePayload
+    >("library.save_skill", payload);
+  }
+
+  async importLibraryEntry(
+    payload: LibraryImportEntryPayload,
+  ): Promise<LibraryImportEntryResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibraryImportEntryPayload,
+      LibraryImportEntryResponsePayload
+    >("library.import_entry", payload);
+  }
+
+  async archiveLibraryEntry(
+    payload: LibraryArchiveEntryPayload,
+  ): Promise<LibraryArchiveEntryResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibraryArchiveEntryPayload,
+      LibraryArchiveEntryResponsePayload
+    >("library.archive_entry", payload);
+  }
+
+  async setLibraryEntryEnabled(
+    payload: LibrarySetEntryEnabledPayload,
+  ): Promise<LibraryEntry> {
+    const result = await this.sendAndWaitForResponse<
+      LibrarySetEntryEnabledPayload,
+      LibrarySetEntryEnabledResponsePayload
+    >("library.set_entry_enabled", payload);
+    return result.entry;
+  }
+
+  async deleteLibraryEntry(
+    payload: LibraryDeleteEntryPayload,
+  ): Promise<LibraryDeleteEntryResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibraryDeleteEntryPayload,
+      LibraryDeleteEntryResponsePayload
+    >("library.delete_entry", payload);
+  }
+
+  async scanLibraryEntries(apiVersion?: string): Promise<LibraryScanEntriesResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibraryScanEntriesPayload,
+      LibraryScanEntriesResponsePayload
+    >("library.scan_entries", { apiVersion });
+  }
+
+  async listSkillDrafts(apiVersion?: string): Promise<SkillDraft[]> {
+    const result = await this.sendAndWaitForResponse<
+      LibraryListSkillDraftsPayload,
+      LibraryListSkillDraftsResponsePayload
+    >("library.list_skill_drafts", { apiVersion });
+    return result.drafts;
+  }
+
+  async getSkillDraft(draftId: string, apiVersion?: string): Promise<SkillDraft> {
+    const result = await this.sendAndWaitForResponse<
+      LibraryGetSkillDraftPayload,
+      LibraryGetSkillDraftResponsePayload
+    >("library.get_skill_draft", { apiVersion, draftId });
+    return result.draft;
+  }
+
+  async createSkillDraft(
+    payload: LibraryCreateSkillDraftPayload,
+  ): Promise<LibraryCreateSkillDraftResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibraryCreateSkillDraftPayload,
+      LibraryCreateSkillDraftResponsePayload
+    >("library.create_skill_draft", payload);
+  }
+
+  async deleteSkillDraft(
+    payload: LibraryDeleteSkillDraftPayload,
+  ): Promise<LibraryDeleteSkillDraftResponsePayload> {
+    return this.sendAndWaitForResponse<
+      LibraryDeleteSkillDraftPayload,
+      LibraryDeleteSkillDraftResponsePayload
+    >("library.delete_skill_draft", payload);
   }
 
   /**
@@ -3461,6 +5565,10 @@ export class GatewayClient {
         (h) => h !== handler,
       );
     };
+  }
+
+  private minimumRequestTimeout(minimumMs: number): number {
+    return Math.max(this.requestTimeoutMs, minimumMs);
   }
 }
 
