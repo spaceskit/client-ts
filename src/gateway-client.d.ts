@@ -873,10 +873,12 @@ export interface IdentityPreviewSystemPromptMatrixResponsePayload {
     matrix: SystemPromptMatrix;
 }
 export type CommunicationMode = 'async_notes' | 'chat_first' | 'structured_handoff';
+export type TemplateAgentProfileBinding = 'explicit' | 'gateway_default_main';
 export interface TemplateAgentDefinition {
     agentId: string;
     agentDefinitionId?: string;
     profileId?: string;
+    profileBinding?: TemplateAgentProfileBinding;
     role?: SpaceAssignmentRole;
     turnOrder?: number;
     isPrimary?: boolean;
@@ -1564,6 +1566,7 @@ export interface ProviderUsageSnapshot {
 export interface GatewayGetLocalUsageTelemetryPayload {
     apiVersion?: string;
     providerId?: string;
+    providerIds?: string[];
 }
 export interface LocalUsageInstallHint {
     command: string;
@@ -2597,7 +2600,7 @@ export declare class GatewayClient {
     /**
      * Get local provider telemetry (quota windows + local token/session aggregates).
      */
-    getLocalUsageTelemetry(apiVersion?: string, providerId?: string): Promise<LocalProviderUsageTelemetry[]>;
+    getLocalUsageTelemetry(apiVersion?: string, providerId?: string, providerIds?: string[]): Promise<LocalProviderUsageTelemetry[]>;
     getExternalConnectivity(apiVersion?: string): Promise<GatewayGetExternalConnectivityResponsePayload>;
     setExternalConnectivity(mode: GatewayExternalConnectivityMode, apiVersion?: string): Promise<GatewaySetExternalConnectivityResponsePayload>;
     /**

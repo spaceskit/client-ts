@@ -17,71 +17,9 @@
  * no longer carries compatibility-only alias fields for removed legacy paths.
  */
 
-// ---------------------------------------------------------------------------
-// Ed25519 Auth Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * An Ed25519 key pair for gateway authentication.
- * Generate with `generateAuthKeyPair()`, or provide your own CryptoKeyPair.
- */
-export interface AuthKeyPair {
-  /** Ed25519 private key (CryptoKey) */
-  privateKey: CryptoKey;
-  /** Ed25519 public key (CryptoKey) */
-  publicKey: CryptoKey;
-  /** Base64-encoded raw public key bytes (for sending to server) */
-  publicKeyBase64: string;
-}
-
-/**
- * Generate a new Ed25519 key pair for gateway authentication.
- * Uses Web Crypto API — works in Bun, Node 20+, and browsers.
- */
-export async function generateAuthKeyPair(): Promise<AuthKeyPair> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "Ed25519" } as any,
-    true, // extractable
-    ["sign", "verify"],
-  );
-
-  // Export raw public key bytes → base64
-  const rawPub = await crypto.subtle.exportKey("raw", keyPair.publicKey);
-  const publicKeyBase64 = btoa(
-    String.fromCharCode(...new Uint8Array(rawPub)),
-  );
-
-  return {
-    privateKey: keyPair.privateKey,
-    publicKey: keyPair.publicKey,
-    publicKeyBase64,
-  };
-}
-
-/**
- * Sign a base64-encoded challenge with an Ed25519 private key.
- * Returns the signature as a base64 string.
- */
-export async function signChallenge(
-  challengeBase64: string,
-  privateKey: CryptoKey,
-): Promise<string> {
-  // Decode challenge from base64
-  const challengeBytes = Uint8Array.from(
-    atob(challengeBase64),
-    (c) => c.charCodeAt(0),
-  );
-
-  // Sign with Ed25519
-  const signature = await crypto.subtle.sign(
-    { name: "Ed25519" } as any,
-    privateKey,
-    challengeBytes,
-  );
-
-  // Encode signature as base64
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
-}
+export { generateAuthKeyPair, signChallenge } from "./gateway-auth.js";
+export type { AuthKeyPair } from "./gateway-auth.js";
+import { signChallenge, type AuthKeyPair } from "./gateway-auth.js";
 
 // ---------------------------------------------------------------------------
 // Protocol Types
@@ -1433,10 +1371,13 @@ export interface IdentityPreviewSystemPromptMatrixResponsePayload {
 
 export type CommunicationMode = 'async_notes' | 'chat_first' | 'structured_handoff';
 
+export type TemplateAgentProfileBinding = 'explicit' | 'gateway_default_main';
+
 export interface TemplateAgentDefinition {
   agentId: string;
   agentDefinitionId?: string;
   profileId?: string;
+  profileBinding?: TemplateAgentProfileBinding;
   role?: SpaceAssignmentRole;
   turnOrder?: number;
   isPrimary?: boolean;
@@ -2068,6 +2009,7 @@ export interface TurnStreamPayload {
   conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
   transcriptVisibility?: 'visible' | 'activity_only' | 'summary';
   summaryTurnId?: string;
+  streamKind?: 'assistant_output' | 'provider_client';
   delta: string;
   seq: number;
   done: boolean;
@@ -2149,6 +2091,7 @@ export interface ProviderUsageSnapshot {
 export interface GatewayGetLocalUsageTelemetryPayload {
   apiVersion?: string;
   providerId?: string;
+  providerIds?: string[];
 }
 
 export interface LocalUsageInstallHint {
@@ -2646,6 +2589,11 @@ export type SchedulerActionType = 'space_prompt';
 export type SchedulerExecutionTargetMode = 'existing_space' | 'new_space';
 export type SchedulerCalendarSyncStatus = 'pending' | 'synced' | 'error';
 export type SchedulerCalendarDriftStatus = 'none' | 'drifted';
+export type SchedulerEvalSummaryMode = 'checkpoints' | 'final_summary';
+export type SchedulerEvalRecommendationStatus = 'suggested' | 'applied';
+export type SchedulerEvalRecommendationKind = 'flow_variant' | 'prompt_pack' | 'summary_mode';
+export type SchedulerEvalScenarioStatus = 'pass' | 'fail' | 'skip';
+export type SchedulerEvalCheckpointStatus = 'completed' | 'failed' | 'observed';
 
 export interface SchedulerSchedulePreset {
   kind: SchedulerScheduleKind;
@@ -2673,6 +2621,93 @@ export interface SchedulerCalendarBinding {
   driftStatus?: SchedulerCalendarDriftStatus;
   driftMessage?: string;
   lastSyncedAt?: string;
+}
+
+export interface SchedulerEvalConfig {
+  evalDefinitionId: string;
+  scenarioIds?: string[];
+  promptVariantId?: string;
+  promptPackId?: string;
+  flowVariantId?: string;
+  summaryMode?: SchedulerEvalSummaryMode;
+  selfImproveEnabled?: boolean;
+}
+
+export interface SchedulerEvalSelfImproveState {
+  enabled: boolean;
+  appliedRevisionIds: string[];
+  lastAppliedRunId?: string;
+}
+
+export interface SchedulerEvalCheckpoint {
+  checkpointId: string;
+  kind: string;
+  status: SchedulerEvalCheckpointStatus;
+  actorId?: string;
+  createdAt: string;
+  detail?: Record<string, unknown>;
+}
+
+export interface SchedulerEvalRecommendation {
+  recommendationId: string;
+  status: SchedulerEvalRecommendationStatus;
+  kind: SchedulerEvalRecommendationKind;
+  title: string;
+  summary?: string;
+  originatingRunId?: string;
+  promptVariantId?: string;
+  promptPackId?: string;
+  flowVariantId?: string;
+  appliedRevisionId?: string;
+  createdAt: string;
+  detail?: Record<string, unknown>;
+}
+
+export interface SchedulerEvalScenarioResult {
+  scenarioId: string;
+  status: SchedulerEvalScenarioStatus;
+  checkpointCount: number;
+  failureReason?: string;
+}
+
+export interface SchedulerEvalArtifactRef {
+  kind: 'space' | 'turn' | 'scheduler_run';
+  id: string;
+  label?: string;
+}
+
+export interface SchedulerEvalRun {
+  evalRunId: string;
+  evalDefinitionId: string;
+  scenarioIds: string[];
+  promptVariantId?: string;
+  promptPackId?: string;
+  flowVariantId?: string;
+  summaryMode: SchedulerEvalSummaryMode;
+  selfImproveEnabled: boolean;
+  spaceId?: string;
+  spaceUid?: string;
+  rootTurnId?: string;
+  finalSummaryText?: string;
+  artifactRefs: SchedulerEvalArtifactRef[];
+  checkpoints: SchedulerEvalCheckpoint[];
+  scenarioResults: SchedulerEvalScenarioResult[];
+  recommendations: SchedulerEvalRecommendation[];
+}
+
+export interface SchedulerEvalDomain {
+  domainId: string;
+  description?: string;
+  scenarioIds: string[];
+}
+
+export interface SchedulerEvalDefinition {
+  evalDefinitionId: string;
+  suiteId: string;
+  description?: string;
+  domainIds: string[];
+  scenarioIds: string[];
+  domains: SchedulerEvalDomain[];
 }
 
 export interface SchedulerLinkedSpace {
@@ -2705,6 +2740,8 @@ export interface SchedulerJob {
   linkedSpaces: SchedulerLinkedSpace[];
   executionTarget: SchedulerExecutionTarget;
   calendarBinding?: SchedulerCalendarBinding;
+  evalConfig?: SchedulerEvalConfig;
+  evalSelfImproveState?: SchedulerEvalSelfImproveState;
 }
 
 export interface SchedulerJobRun {
@@ -2720,6 +2757,7 @@ export interface SchedulerJobRun {
   errorCode?: string;
   errorMessage?: string;
   result?: Record<string, unknown>;
+  evalRun?: SchedulerEvalRun;
 }
 
 export interface SchedulerCreateJobPayload {
@@ -2733,6 +2771,7 @@ export interface SchedulerCreateJobPayload {
   relatedSpaceIds?: string[];
   executionTarget?: SchedulerExecutionTarget;
   calendarBinding?: SchedulerCalendarBinding;
+  evalConfig?: SchedulerEvalConfig;
 }
 
 export interface SchedulerGetJobPayload {
@@ -2760,6 +2799,7 @@ export interface SchedulerUpdateJobPayload {
   relatedSpaceIds?: string[];
   executionTarget?: SchedulerExecutionTarget;
   calendarBinding?: SchedulerCalendarBinding | null;
+  evalConfig?: SchedulerEvalConfig | null;
 }
 
 export interface SchedulerDeleteJobPayload {
@@ -2800,6 +2840,14 @@ export interface SchedulerListRunsResult {
   nextOffset?: number;
 }
 
+export interface SchedulerListEvalDefinitionsPayload {
+  apiVersion?: string;
+}
+
+export interface SchedulerListEvalDefinitionsResult {
+  definitions: SchedulerEvalDefinition[];
+}
+
 export interface SchedulerRunNowPayload {
   apiVersion?: string;
   idempotencyKey?: string;
@@ -2809,6 +2857,257 @@ export interface SchedulerRunNowPayload {
 export interface SchedulerRunNowResult {
   run: SchedulerJobRun;
   job: SchedulerJob;
+}
+
+export type WorkbenchExecutionMode = 'supervised' | 'autonomous';
+export type WorkbenchBatchStatus = 'draft' | 'queued' | 'running' | 'completed' | 'cancelled';
+export type WorkbenchRunStatus = 'queued' | 'awaiting_review' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type WorkbenchRunStage = 'intake' | 'plan' | 'execute' | 'verify' | 'review_gate' | 'land' | 'report';
+export type WorkbenchApprovalState = 'pending' | 'approved' | 'rejected' | 'not_required';
+export type WorkbenchVerificationMode = 'machine_readable' | 'review_only';
+export type WorkbenchVerificationSuiteStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped';
+export type WorkbenchVerificationResultStatus = 'pending' | 'passed' | 'failed';
+export type WorkbenchLandingStatus = 'not_started' | 'blocked' | 'landed';
+export type WorkbenchExecutionContextStage = 'planning' | 'implementation' | 'verification' | 'completed' | 'failed' | 'paused';
+
+export interface WorkbenchExecutionModeEligibility {
+  supervised: boolean;
+  autonomous: boolean;
+}
+
+export interface WorkbenchQueueItem {
+  queueItemId: string;
+  queueIndex: number;
+  title: string;
+  type: string;
+  status: string;
+  nextAction: string;
+  taskFilePath: string;
+  delegation: string;
+  parallelKeys: string[];
+  aiShippable: boolean;
+  executionModeEligibility: WorkbenchExecutionModeEligibility;
+  verificationMode: WorkbenchVerificationMode;
+  executionModeBlockers: string[];
+  products: string[];
+  verificationCommands: string[];
+}
+
+export interface WorkbenchBatch {
+  batchId: string;
+  name: string;
+  status: WorkbenchBatchStatus;
+  executionMode: WorkbenchExecutionMode;
+  queueItemIds: string[];
+  createdByPrincipalId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkbenchWorktreeRef {
+  path: string;
+  branchName: string;
+  baseBranchName: string;
+  createdAt: string;
+}
+
+export interface WorkbenchRepoTouch {
+  repoId: string;
+  repoPath: string;
+  kind: 'meta' | 'submodule';
+  committed: boolean;
+}
+
+export interface WorkbenchVerificationSuite {
+  suiteId: string;
+  name: string;
+  command: string;
+  status: WorkbenchVerificationSuiteStatus;
+  startedAt?: string;
+  completedAt?: string;
+  exitCode?: number;
+  durationMs?: number;
+  logArtifactId?: string;
+  summary?: string;
+}
+
+export interface WorkbenchVerificationResult {
+  status: WorkbenchVerificationResultStatus;
+  summary?: string;
+  completedAt?: string;
+}
+
+export interface WorkbenchLandingResult {
+  status: WorkbenchLandingStatus;
+  merged?: boolean;
+  summary?: string;
+  completedAt?: string;
+}
+
+export interface WorkbenchExecutionContext {
+  spaceId: string;
+  spaceUid?: string;
+  spaceName: string;
+  planningTurnId?: string;
+  implementationTurnId?: string;
+  stage: WorkbenchExecutionContextStage;
+}
+
+export interface WorkbenchRun {
+  runId: string;
+  batchId?: string;
+  queueItemId: string;
+  queueItemPath: string;
+  status: WorkbenchRunStatus;
+  currentStage: WorkbenchRunStage;
+  executionMode: WorkbenchExecutionMode;
+  approvalState: WorkbenchApprovalState;
+  worktree?: WorkbenchWorktreeRef;
+  touchedRepos: WorkbenchRepoTouch[];
+  verificationMode: WorkbenchVerificationMode;
+  executionModeBlockers: string[];
+  verificationSuites: WorkbenchVerificationSuite[];
+  verificationResult?: WorkbenchVerificationResult;
+  landingResult?: WorkbenchLandingResult;
+  executionContext?: WorkbenchExecutionContext;
+  createdByPrincipalId: string;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
+}
+
+export interface WorkbenchArtifact {
+  artifactId: string;
+  runId: string;
+  kind: string;
+  title: string;
+  contentType: string;
+  contentText: string;
+  createdAt: string;
+}
+
+export interface WorkbenchPolicy {
+  defaultExecutionMode: WorkbenchExecutionMode;
+  autonomousEnabled: boolean;
+  maxParallelRuns: number;
+  requireExplicitAutonomousOptIn: boolean;
+  requireAiShippableForAutonomous: boolean;
+  updatedAt: string;
+}
+
+export interface WorkbenchListQueuePayload {
+  apiVersion?: string;
+  limit?: number;
+}
+
+export interface WorkbenchGetQueueItemPayload {
+  apiVersion?: string;
+  queueItemId: string;
+}
+
+export interface WorkbenchCreateBatchPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  name: string;
+  queueItemIds: string[];
+  executionMode?: WorkbenchExecutionMode;
+}
+
+export interface WorkbenchListBatchesPayload {
+  apiVersion?: string;
+  limit?: number;
+}
+
+export interface WorkbenchUpdateBatchPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  batchId: string;
+  name?: string;
+  queueItemIds?: string[];
+  executionMode?: WorkbenchExecutionMode;
+  status?: WorkbenchBatchStatus;
+}
+
+export interface WorkbenchStartRunPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  queueItemId: string;
+  batchId?: string;
+  executionMode?: WorkbenchExecutionMode;
+}
+
+export interface WorkbenchRetryRunPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  runId: string;
+}
+
+export interface WorkbenchCancelRunPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  runId: string;
+}
+
+export interface WorkbenchListRunsPayload {
+  apiVersion?: string;
+  batchId?: string;
+  queueItemId?: string;
+  limit?: number;
+}
+
+export interface WorkbenchGetRunPayload {
+  apiVersion?: string;
+  runId: string;
+}
+
+export interface WorkbenchApproveStagePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  runId: string;
+  stage?: WorkbenchRunStage;
+}
+
+export interface WorkbenchRejectStagePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  runId: string;
+  stage?: WorkbenchRunStage;
+  reason?: string;
+}
+
+export interface WorkbenchSetModePayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  runId?: string;
+  batchId?: string;
+  executionMode: WorkbenchExecutionMode;
+}
+
+export interface WorkbenchSetModeResult {
+  run?: WorkbenchRun;
+  batch?: WorkbenchBatch;
+}
+
+export interface WorkbenchListArtifactsPayload {
+  apiVersion?: string;
+  runId: string;
+}
+
+export interface WorkbenchGetPolicyPayload {
+  apiVersion?: string;
+}
+
+export interface WorkbenchUpdatePolicyPayload {
+  apiVersion?: string;
+  idempotencyKey?: string;
+  defaultExecutionMode?: WorkbenchExecutionMode;
+  autonomousEnabled?: boolean;
+  maxParallelRuns?: number;
+  requireExplicitAutonomousOptIn?: boolean;
+  requireAiShippableForAutonomous?: boolean;
 }
 
 export interface SpaceLinkPayload {
@@ -3685,6 +3984,11 @@ export class GatewayClient {
     const agentId = this.pickNonEmptyString(candidate.agentId)
       ?? this.pickNonEmptyString(nestedEvent?.agentId)
       ?? 'unknown-agent';
+    const rootTurnId = this.pickNonEmptyString(candidate.rootTurnId);
+    const conversationTopology = this.pickNonEmptyString(candidate.conversationTopology) as TurnStreamPayload['conversationTopology'];
+    const transcriptVisibility = this.pickNonEmptyString(candidate.transcriptVisibility) as TurnStreamPayload['transcriptVisibility'];
+    const summaryTurnId = this.pickNonEmptyString(candidate.summaryTurnId);
+    const streamKind = this.pickNonEmptyString(candidate.streamKind) as TurnStreamPayload['streamKind'];
     const seq = this.coerceInteger(candidate.seq ?? nestedEvent?.seq, 0);
     const done = this.coerceBoolean(candidate.done ?? nestedEvent?.done, false);
 
@@ -3692,7 +3996,12 @@ export class GatewayClient {
       spaceId,
       spaceUid,
       turnId,
+      rootTurnId,
       agentId,
+      conversationTopology,
+      transcriptVisibility,
+      summaryTurnId,
+      streamKind,
       delta,
       seq,
       done,
@@ -4819,10 +5128,12 @@ export class GatewayClient {
   async getLocalUsageTelemetry(
     apiVersion?: string,
     providerId?: string,
+    providerIds?: string[],
   ): Promise<LocalProviderUsageTelemetry[]> {
     const payload: GatewayGetLocalUsageTelemetryPayload = {
       apiVersion,
       providerId,
+      providerIds,
     };
     const result = await this.sendAndWaitForResponse<
       GatewayGetLocalUsageTelemetryPayload,
@@ -5154,6 +5465,16 @@ export class GatewayClient {
     return result.jobs;
   }
 
+  async listSchedulerEvalDefinitions(
+    payload: SchedulerListEvalDefinitionsPayload = {},
+  ): Promise<SchedulerEvalDefinition[]> {
+    const result = await this.sendAndWaitForResponse<
+      SchedulerListEvalDefinitionsPayload,
+      SchedulerListEvalDefinitionsResult
+    >('scheduler.list_eval_definitions', payload);
+    return result.definitions;
+  }
+
   async updateSchedulerJob(payload: SchedulerUpdateJobPayload): Promise<SchedulerJob> {
     const result = await this.sendAndWaitForResponse<
       SchedulerUpdateJobPayload,
@@ -5197,6 +5518,133 @@ export class GatewayClient {
       SchedulerRunNowPayload,
       SchedulerRunNowResult
     >('scheduler.run_now', payload);
+  }
+
+  async listWorkbenchQueue(payload: WorkbenchListQueuePayload = {}): Promise<WorkbenchQueueItem[]> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchListQueuePayload,
+      { items: WorkbenchQueueItem[] }
+    >('workbench.list_queue', payload);
+    return result.items;
+  }
+
+  async getWorkbenchQueueItem(payload: WorkbenchGetQueueItemPayload): Promise<WorkbenchQueueItem> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchGetQueueItemPayload,
+      { item: WorkbenchQueueItem }
+    >('workbench.get_queue_item', payload);
+    return result.item;
+  }
+
+  async createWorkbenchBatch(payload: WorkbenchCreateBatchPayload): Promise<WorkbenchBatch> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchCreateBatchPayload,
+      { batch: WorkbenchBatch }
+    >('workbench.create_batch', payload);
+    return result.batch;
+  }
+
+  async listWorkbenchBatches(payload: WorkbenchListBatchesPayload = {}): Promise<WorkbenchBatch[]> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchListBatchesPayload,
+      { batches: WorkbenchBatch[] }
+    >('workbench.list_batches', payload);
+    return result.batches;
+  }
+
+  async updateWorkbenchBatch(payload: WorkbenchUpdateBatchPayload): Promise<WorkbenchBatch> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchUpdateBatchPayload,
+      { batch: WorkbenchBatch }
+    >('workbench.update_batch', payload);
+    return result.batch;
+  }
+
+  async startWorkbenchRun(payload: WorkbenchStartRunPayload): Promise<WorkbenchRun> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchStartRunPayload,
+      { run: WorkbenchRun }
+    >('workbench.start_run', payload);
+    return result.run;
+  }
+
+  async retryWorkbenchRun(payload: WorkbenchRetryRunPayload): Promise<WorkbenchRun> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchRetryRunPayload,
+      { run: WorkbenchRun }
+    >('workbench.retry_run', payload);
+    return result.run;
+  }
+
+  async cancelWorkbenchRun(payload: WorkbenchCancelRunPayload): Promise<WorkbenchRun> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchCancelRunPayload,
+      { run: WorkbenchRun }
+    >('workbench.cancel_run', payload);
+    return result.run;
+  }
+
+  async listWorkbenchRuns(payload: WorkbenchListRunsPayload = {}): Promise<WorkbenchRun[]> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchListRunsPayload,
+      { runs: WorkbenchRun[] }
+    >('workbench.list_runs', payload);
+    return result.runs;
+  }
+
+  async getWorkbenchRun(payload: WorkbenchGetRunPayload): Promise<WorkbenchRun> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchGetRunPayload,
+      { run: WorkbenchRun }
+    >('workbench.get_run', payload);
+    return result.run;
+  }
+
+  async approveWorkbenchStage(payload: WorkbenchApproveStagePayload): Promise<WorkbenchRun> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchApproveStagePayload,
+      { run: WorkbenchRun }
+    >('workbench.approve_stage', payload);
+    return result.run;
+  }
+
+  async rejectWorkbenchStage(payload: WorkbenchRejectStagePayload): Promise<WorkbenchRun> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchRejectStagePayload,
+      { run: WorkbenchRun }
+    >('workbench.reject_stage', payload);
+    return result.run;
+  }
+
+  async setWorkbenchMode(payload: WorkbenchSetModePayload): Promise<WorkbenchSetModeResult> {
+    return this.sendAndWaitForResponse<
+      WorkbenchSetModePayload,
+      WorkbenchSetModeResult
+    >('workbench.set_mode', payload);
+  }
+
+  async listWorkbenchArtifacts(payload: WorkbenchListArtifactsPayload): Promise<WorkbenchArtifact[]> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchListArtifactsPayload,
+      { artifacts: WorkbenchArtifact[] }
+    >('workbench.list_artifacts', payload);
+    return result.artifacts;
+  }
+
+  async getWorkbenchPolicy(payload: WorkbenchGetPolicyPayload = {}): Promise<WorkbenchPolicy> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchGetPolicyPayload,
+      { policy: WorkbenchPolicy }
+    >('workbench.get_policy', payload);
+    return result.policy;
+  }
+
+  async updateWorkbenchPolicy(payload: WorkbenchUpdatePolicyPayload): Promise<WorkbenchPolicy> {
+    const result = await this.sendAndWaitForResponse<
+      WorkbenchUpdatePolicyPayload,
+      { policy: WorkbenchPolicy }
+    >('workbench.update_policy', payload);
+    return result.policy;
   }
 
   async linkSpaces(payload: SpaceLinkPayload): Promise<SpaceLinkResult> {
