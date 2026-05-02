@@ -2340,7 +2340,24 @@ export type GatewayExternalConnectivityState =
 
 export interface GatewayExternalConnectivitySettings {
   mode: GatewayExternalConnectivityMode;
+  funnelEnabled?: boolean | null;
   updatedAt: string;
+}
+
+export type GatewayExternalConnectivityFunnelState =
+  | "disabled"
+  | "unavailable"
+  | "not_configured"
+  | "ready"
+  | "error";
+
+export interface GatewayExternalConnectivityFunnelStatus {
+  state: GatewayExternalConnectivityFunnelState;
+  funnelConfigured: boolean;
+  funnelUrl?: string;
+  exposedPaths: string[];
+  summary?: string;
+  remediation?: string;
 }
 
 export interface GatewayExternalConnectivityAdvertisedEndpoint {
@@ -2372,6 +2389,7 @@ export interface GatewayExternalConnectivityStatus {
   remediation?: string;
   advertisedEndpoints: GatewayExternalConnectivityAdvertisedEndpoint[];
   tailscaleStatus?: GatewayExternalConnectivityTailscaleStatus;
+  funnelStatus?: GatewayExternalConnectivityFunnelStatus;
 }
 
 export interface GatewayGetExternalConnectivityPayload {
@@ -2386,6 +2404,7 @@ export interface GatewayGetExternalConnectivityResponsePayload {
 export interface GatewaySetExternalConnectivityPayload {
   apiVersion?: string;
   mode: GatewayExternalConnectivityMode;
+  funnelEnabled?: boolean | null;
 }
 
 export interface GatewaySetExternalConnectivityResponsePayload {
@@ -5254,14 +5273,15 @@ export class GatewayClient {
 
   async setExternalConnectivity(
     mode: GatewayExternalConnectivityMode,
-    apiVersion?: string,
+    options?: { funnelEnabled?: boolean | null; apiVersion?: string },
   ): Promise<GatewaySetExternalConnectivityResponsePayload> {
     return this.sendAndWaitForResponse<
       GatewaySetExternalConnectivityPayload,
       GatewaySetExternalConnectivityResponsePayload
     >("gateway.set_external_connectivity", {
-      apiVersion,
+      apiVersion: options?.apiVersion,
       mode,
+      funnelEnabled: options?.funnelEnabled,
     });
   }
 
