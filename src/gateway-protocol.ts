@@ -1,0 +1,16 @@
+export type * from "./protocol/core.js";
+export type * from "./protocol/spaces-admin.js";
+export type * from "./protocol/space-mcp-resources.js";
+export type * from "./protocol/space-observability.js";
+export type * from "./protocol/space-memory.js";
+export type * from "./protocol/identity.js";
+export type * from "./protocol/templates-library.js";
+export type * from "./protocol/auth-adapter-events.js";
+export type * from "./protocol/gateway-usage.js";
+export type * from "./protocol/gateway-tools.js";
+export type * from "./protocol/gateway-admin.js";
+export type * from "./protocol/orchestrator.js";
+export type * from "./protocol/scheduler.js";
+export type * from "./protocol/workbench.js";
+export type * from "./protocol/sharing-sync.js";
+export type * from "./protocol/speech.js";
