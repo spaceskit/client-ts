@@ -242,9 +242,7 @@ export interface TurnEventPayload {
   conversationTopology?: 'direct' | 'shared_team_chat' | 'broadcast_team';
   transcriptVisibility?: 'visible' | 'activity_only' | 'summary';
   summaryTurnId?: string;
-  eventType: string;
-  data: unknown;
-  typedPayload?: TypedTurnEventPayload;
+  typedPayload: TypedTurnEventPayload;
   ts?: string;
 }
 

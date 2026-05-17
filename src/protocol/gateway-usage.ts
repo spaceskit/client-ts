@@ -7,7 +7,7 @@ export interface UsageWindowSummary {
   totalTokens: number;
   spentUsd: number;
   tokenAccuracy: 'reported' | 'estimated' | 'mixed';
-  usageSource: 'ledger' | 'local_scanner' | 'legacy_turns';
+  usageSource: 'ledger' | 'local_scanner';
 }
 
 export interface BudgetSummary {
@@ -26,7 +26,7 @@ export interface ProviderUsageSnapshot {
   totalTokens: number;
   spentUsd: number;
   tokenAccuracy: 'reported' | 'estimated' | 'mixed';
-  usageSource: 'ledger' | 'local_scanner' | 'legacy_turns';
+  usageSource: 'ledger' | 'local_scanner';
   message?: string;
 }
 
@@ -73,7 +73,7 @@ export interface LocalUsageSession {
   totalTokens: number;
   estimatedCostUsd?: number;
   tokenAccuracy: 'reported' | 'estimated' | 'mixed';
-  usageSource: 'ledger' | 'local_scanner' | 'legacy_turns';
+  usageSource: 'ledger' | 'local_scanner';
 }
 
 export interface LocalUsageSummary {
@@ -85,7 +85,7 @@ export interface LocalUsageSummary {
   totalTokens: number;
   estimatedCostUsd?: number;
   tokenAccuracy: 'reported' | 'estimated' | 'mixed';
-  usageSource: 'ledger' | 'local_scanner' | 'legacy_turns';
+  usageSource: 'ledger' | 'local_scanner';
 }
 
 export interface LocalProviderUsageTelemetry {

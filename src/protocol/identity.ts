@@ -17,7 +17,6 @@ export interface AgentDefinitionSummary {
   instructions: string;
   defaultSkillIds: string[];
   providerHint?: string;
-  modelHint?: string;
   modelConfig?: ProfileModelConfig;
   isDefault: boolean;
   status: ManagedRecordStatus;
@@ -151,7 +150,6 @@ export interface IdentityCreateAgentDefinitionPayload {
   instructions?: string;
   defaultSkillIds?: string[];
   providerHint?: string;
-  modelHint?: string;
   modelConfig?: ProfileModelConfig;
   isDefault?: boolean;
 }
@@ -171,7 +169,6 @@ export interface IdentityUpdateAgentDefinitionPayload {
   instructions?: string;
   defaultSkillIds?: string[];
   providerHint?: string;
-  modelHint?: string;
   modelConfig?: ProfileModelConfig;
   isDefault?: boolean;
 }
